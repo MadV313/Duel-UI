@@ -1,0 +1,68 @@
+/* General Animation Div */
+.animation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* Attack Animation */
+.animation.attack {
+  background: rgba(255, 0, 0, 0.3);
+  animation: pulse 1s ease-out;
+}
+
+/* Heal Animation */
+.animation.heal {
+  background: rgba(0, 255, 0, 0.3);
+  animation: pulse 1s ease-out;
+}
+
+/* Fire Animation */
+.animation.fire {
+  background: rgba(255, 69, 0, 0.3);
+  animation: shake 1s ease-in-out;
+}
+
+/* Explosion Animation */
+.animation.explosion {
+  background: rgba(255, 165, 0, 0.5);
+  animation: flash 1s ease-out;
+}
+
+/* Poison Animation */
+.animation.poison {
+  background: rgba(0, 255, 0, 0.2);
+  animation: poisonPulse 1s ease-in-out;
+}
+
+/* Animation Keyframes */
+@keyframes pulse {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes shake {
+  0% { transform: translate(0px, 0px); }
+  25% { transform: translate(5px, -5px); }
+  50% { transform: translate(-5px, 5px); }
+  75% { transform: translate(5px, 5px); }
+  100% { transform: translate(0px, 0px); }
+}
+
+@keyframes flash {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes poisonPulse {
+  0% { filter: hue-rotate(0deg); opacity: 0.5; }
+  50% { filter: hue-rotate(90deg); opacity: 1; }
+  100% { filter: hue-rotate(0deg); opacity: 0.5; }
+}
