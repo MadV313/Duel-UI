@@ -1,4 +1,6 @@
-const duelState = {
+// duelState.js
+
+export const duelState = {
   player1: {
     hp: 200,
     hand: [],
@@ -17,7 +19,7 @@ const duelState = {
   winner: null,
 };
 
-function initializeDecks() {
+export function initializeDecks() {
   // Placeholder decks with sample card numbers (replace with real deck logic later)
   for (let i = 1; i <= 30; i++) {
     duelState.player1.deck.push(`00${i}_CardName.png`);
@@ -25,7 +27,7 @@ function initializeDecks() {
   }
 }
 
-function drawCard(player) {
+export function drawCard(player) {
   if (duelState[player].deck.length === 0) return;
   if (duelState[player].hand.length >= 4) {
     alert(`${player} must play or discard a card before drawing!`);
@@ -33,31 +35,31 @@ function drawCard(player) {
   }
   const card = duelState[player].deck.shift();
   duelState[player].hand.push(card);
-  updateUI();
+  renderDuelUI(); // instead of updateUI()
 }
 
-function playCard(player, cardIndex) {
+export function playCard(player, cardIndex) {
   if (duelState[player].field.length >= 4) {
     alert(`You can only have 4 cards on the field.`);
     return;
   }
   const card = duelState[player].hand.splice(cardIndex, 1)[0];
   duelState[player].field.push(card);
-  updateUI();
+  renderDuelUI(); // instead of updateUI()
 }
 
-function discardCard(player, cardIndex) {
+export function discardCard(player, cardIndex) {
   const card = duelState[player].hand.splice(cardIndex, 1)[0];
   duelState[player].discardPile.push(card);
-  updateUI();
+  renderDuelUI(); // instead of updateUI()
 }
 
-function endTurn() {
+export function endTurn() {
   duelState.turn = duelState.turn === 'player1' ? 'player2' : 'player1';
-  updateUI();
+  renderDuelUI(); // instead of updateUI()
 }
 
-function updateHP(player, amount) {
+export function updateHP(player, amount) {
   duelState[player].hp += amount;
   if (duelState[player].hp <= 0) {
     duelState[player].hp = 0;
@@ -65,5 +67,5 @@ function updateHP(player, amount) {
     alert(`${duelState.winner} wins!`);
     // Here we would trigger the transition to the summary UI
   }
-  updateUI();
+  renderDuelUI(); // instead of updateUI()
 }
