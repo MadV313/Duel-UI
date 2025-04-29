@@ -1,6 +1,7 @@
 // duel.js — handles draw, discard, and turn logic
 import { duelState } from './duelState.js';
 import { updateDuelUI } from './renderDuelUI.js';
+import { applyStartTurnBuffs } from './buffTracker.js';
 
 export async function drawCard() {
     const playerId = duelState.currentPlayer;
@@ -27,16 +28,14 @@ export async function drawCard() {
     player.hand.push(drawnCard);
 
     // Bonus from Assault Backpack (#054)
-    if (player.field.includes('054')) {
-        if (duelState.deck.length > 0) {
-            const bonusCard = duelState.deck.shift();
-            player.hand.push(bonusCard);
-            console.log("Assault Backpack active: Drew extra card.");
-        }
+    if (player.field.includes('054') && duelState.deck.length > 0 && player.hand.length < 4) {
+        const bonusCard = duelState.deck.shift();
+        player.hand.push(bonusCard);
+        console.log("Assault Backpack active: Drew extra card.");
     }
 
     // Bonus from Tactical Backpack (#056)
-    if (player.field.includes('056') && duelState.lootPile.length > 0) {
+    if (player.field.includes('056') && duelState.lootPile.length > 0 && player.hand.length < 4) {
         const bonusLootCard = duelState.lootPile.shift();
         player.hand.push(bonusLootCard);
         console.log("Tactical Backpack active: Drew bonus loot card.");
@@ -49,6 +48,9 @@ export async function endTurn() {
     // Switch turn
     duelState.currentPlayer = duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
     duelState.players[duelState.currentPlayer].hasDrawn = false;
+
+    // Apply any start-of-turn buffs
+    applyStartTurnBuffs();
 
     updateDuelUI();
 }
