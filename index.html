@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DayZ CCG Duel Field</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="duelState.js" defer></script>
+  <script src="renderDuelUI.js" defer></script>
+  <script src="animations.js" defer></script>
+  <script src="coinFlip.js" defer></script>
+</head>
+<body>
+  <div id="background"></div>
+
+  <div id="player2-hand" class="hand"></div>
+  <div id="player2-field" class="field"></div>
+  <div id="player2-deck" class="pile">Draw Pile</div>
+  <div id="player2-discard" class="pile">Discard Pile</div>
+
+  <div id="player1-field" class="field"></div>
+  <div id="player1-hand" class="hand"></div>
+  <div id="player1-deck" class="pile">Draw Pile</div>
+  <div id="player1-discard" class="pile">Discard Pile</div>
+
+  <div id="controls">
+    <button onclick="drawCard()">Draw</button>
+    <button onclick="endTurn()">End Turn</button>
+    <button onclick="flipCoin()">Flip Coin</button>
+  </div>
+
+  <div id="hp-display">
+    <div>Player 1 HP: <span id="player1-hp">200</span></div>
+    <div>Player 2 HP: <span id="player2-hp">200</span></div>
+  </div>
+
+  <div id="turn-display"></div>
+</body>
+</html>
