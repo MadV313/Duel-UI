@@ -14,7 +14,7 @@
   <script type="module" src="scripts/animations.js" defer></script>
   <script type="module" src="scripts/coinFlip.js" defer></script>
 
-  <!-- NEW Draw and Turn Scripts -->
+  <!-- UPDATED INLINE Draw, End Turn, and Buff Logic -->
   <script defer>
     async function drawCard() {
       const playerId = duelState.currentPlayer;
@@ -28,43 +28,54 @@
       if (duelState.deck.length === 0) {
         alert("Deck empty! You suffer stamina loss!");
 
-        // Stamina Drain (example: -20 HP)
         player.hp -= 20;
-        if (player.hp < 0) player.hp = 0; // No negative HP
+        if (player.hp < 0) player.hp = 0;
 
         updateDuelUI();
         return;
       }
 
-      // Draw main card
       const drawnCard = duelState.deck.shift();
       player.hand.push(drawnCard);
 
-      // Check for Assault Backpack (#054) extra draw
-      if (player.field.includes('054')) {
-        if (duelState.deck.length > 0) {
-          const bonusCard = duelState.deck.shift();
-          player.hand.push(bonusCard);
-          console.log("Assault Backpack active: Drew extra card.");
-        }
+      // Bonus from Assault Backpack (#054)
+      if (player.field.includes('054') && duelState.deck.length > 0 && player.hand.length < 4) {
+        const bonusCard = duelState.deck.shift();
+        player.hand.push(bonusCard);
+        console.log("Assault Backpack active: drew extra card.");
       }
 
-      // Check for Tactical Backpack (#056) bonus loot draw
-      if (player.field.includes('056') && duelState.lootPile.length > 0) {
-        const bonusLootCard = duelState.lootPile.shift();
-        player.hand.push(bonusLootCard);
-        console.log("Tactical Backpack active: Drew bonus loot card.");
+      // Bonus from Tactical Backpack (#056)
+      if (player.field.includes('056') && duelState.lootPile.length > 0 && player.hand.length < 4) {
+        const bonusLoot = duelState.lootPile.shift();
+        player.hand.push(bonusLoot);
+        console.log("Tactical Backpack active: drew loot card.");
       }
 
       updateDuelUI();
     }
 
     async function endTurn() {
-      // Advance to next player
       duelState.currentPlayer = duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
-
-      // Reset per-turn states
       duelState.players[duelState.currentPlayer].hasDrawn = false;
+
+      // Start-of-turn buffs
+      const playerId = duelState.currentPlayer;
+      const player = duelState.players[playerId];
+
+      // Buff: Assault Backpack (#054)
+      if (player.field.includes('054') && duelState.deck.length > 0 && player.hand.length < 4) {
+        const bonusCard = duelState.deck.shift();
+        player.hand.push(bonusCard);
+        console.log("BuffTracker: Assault Backpack drew 1 card.");
+      }
+
+      // Buff: Tactical Backpack (#056)
+      if (player.field.includes('056') && duelState.lootPile.length > 0 && player.hand.length < 4) {
+        const bonusLoot = duelState.lootPile.shift();
+        player.hand.push(bonusLoot);
+        console.log("BuffTracker: Tactical Backpack drew 1 loot card.");
+      }
 
       updateDuelUI();
     }
