@@ -106,3 +106,71 @@ body {
   50% { opacity: 0.7; }
   100% { opacity: 0; }
 }
+
+/* ----------------------------- */
+/* Card UI & Field Styling Below */
+/* ----------------------------- */
+
+.card {
+  display: inline-block;
+  margin: 6px;
+  text-align: center;
+  position: relative;
+  width: 100px;
+}
+
+.card-image {
+  width: 100px;
+  height: auto;
+  border-radius: 4px;
+}
+
+.card-name {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #fff;
+}
+
+/* Face-Down Trap Styling */
+.card.face-down {
+  filter: grayscale(100%);
+  opacity: 0.85;
+  border: 2px dashed #555;
+}
+
+/* Optional Type-based Borders */
+.card.attack { border: 2px solid red; }
+.card.defense { border: 2px solid blue; }
+.card.trap { border: 2px dashed purple; }
+
+/* Combo & Damage Glow Effects */
+.card.damage-glow {
+  animation: damagePulse 1s ease-in-out;
+  box-shadow: 0 0 15px red;
+}
+
+.card.combo-glow {
+  animation: comboPulse 1s ease-in-out;
+  box-shadow: 0 0 15px gold;
+}
+
+@keyframes damagePulse {
+  0% { box-shadow: 0 0 0 red; }
+  50% { box-shadow: 0 0 20px red; }
+  100% { box-shadow: 0 0 0 red; }
+}
+
+@keyframes comboPulse {
+  0% { box-shadow: 0 0 0 gold; }
+  50% { box-shadow: 0 0 20px gold; }
+  100% { box-shadow: 0 0 0 gold; }
+}
+
+/* Field/Hand Containers */
+#player1-hand, #player2-hand,
+#player1-field, #player2-field {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 12px;
+}
