@@ -23,8 +23,50 @@ export function renderDuelUI() {
     alert(`${duelState.winner} wins the duel!`);
     turnDisplay.textContent = `Winner: ${duelState.winner}`;
 
-    // TODO: Trigger duel summary screen transition here
-    return;
+    // Trigger duel summary upload and redirect
+    if (!duelState.summarySaved) {
+      console.log("Saving summary and redirecting...");
+
+      const duelId = `duel_${Date.now()}`;
+      const summary = {
+        duelId,
+        winner: duelState.winner,
+        players: {
+          player1: {
+            name: duelState.players.player1.discordId || "Player 1",
+            hp: duelState.players.player1.hp,
+            field: duelState.players.player1.field,
+            cardsPlayed:
+              duelState.players.player1.deck.length +
+              duelState.players.player1.discardPile.length,
+          },
+          player2: {
+            name: duelState.players.player2.discordId || "Player 2",
+            hp: duelState.players.player2.hp,
+            field: duelState.players.player2.field,
+            cardsPlayed:
+              duelState.players.player2.deck.length +
+              duelState.players.player2.discardPile.length,
+          },
+        },
+      };
+
+      duelState.summarySaved = true;
+
+      fetch('https://duel-bot-backend-production.up.railway.app/summary/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(summary),
+      })
+        .then(() => {
+          window.location.href = `https://duel-bot-backend-production.up.railway.app/summary/${duelId}`;
+        })
+        .catch(err => {
+          console.error('Summary save failed:', err);
+        });
+    }
+
+    return; // Stop re-render loop
   }
 
   // If it's the bot's turn, trigger backend move
@@ -34,7 +76,7 @@ export function renderDuelUI() {
     fetch('https://duel-bot-backend-production.up.railway.app/bot/turn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(duelState)
+      body: JSON.stringify(duelState),
     })
       .then(res => res.json())
       .then(updatedState => {
