@@ -2,6 +2,7 @@
 import { duelState } from './duelState.js';
 import { updateDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
+import { triggerAnimation } from './animations.js';
 
 export async function drawCard() {
     const playerId = duelState.currentPlayer;
@@ -26,12 +27,14 @@ export async function drawCard() {
     // Draw main card
     const drawnCard = duelState.deck.shift();
     player.hand.push(drawnCard);
+    console.log(`Player ${playerId} drew card: ${drawnCard.name}`);
 
     // Bonus from Assault Backpack (#054)
     if (player.field.includes('054') && duelState.deck.length > 0 && player.hand.length < 4) {
         const bonusCard = duelState.deck.shift();
         player.hand.push(bonusCard);
         console.log("Assault Backpack active: Drew extra card.");
+        triggerAnimation('heal'); // visual feedback
     }
 
     // Bonus from Tactical Backpack (#056)
@@ -39,6 +42,7 @@ export async function drawCard() {
         const bonusLootCard = duelState.lootPile.shift();
         player.hand.push(bonusLootCard);
         console.log("Tactical Backpack active: Drew bonus loot card.");
+        triggerAnimation('heal'); // visual feedback
     }
 
     updateDuelUI();
