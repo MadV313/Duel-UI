@@ -15,46 +15,56 @@ export async function drawCard() {
 
     if (duelState.deck.length === 0) {
         alert("Deck empty! You suffer stamina loss!");
-
-        // Stamina Drain
         player.hp -= 20;
         if (player.hp < 0) player.hp = 0;
-
         updateDuelUI();
         return;
     }
 
-    // Draw main card
     const drawnCard = duelState.deck.shift();
     player.hand.push(drawnCard);
     console.log(`Player ${playerId} drew card: ${drawnCard.name}`);
 
-    // Bonus from Assault Backpack (#054)
     if (player.field.includes('054') && duelState.deck.length > 0 && player.hand.length < 4) {
         const bonusCard = duelState.deck.shift();
         player.hand.push(bonusCard);
         console.log("Assault Backpack active: Drew extra card.");
-        triggerAnimation('heal'); // visual feedback
+        triggerAnimation('heal');
     }
 
-    // Bonus from Tactical Backpack (#056)
     if (player.field.includes('056') && duelState.lootPile.length > 0 && player.hand.length < 4) {
         const bonusLootCard = duelState.lootPile.shift();
         player.hand.push(bonusLootCard);
         console.log("Tactical Backpack active: Drew bonus loot card.");
-        triggerAnimation('heal'); // visual feedback
+        triggerAnimation('heal');
     }
 
     updateDuelUI();
 }
 
 export async function endTurn() {
-    // Switch turn
-    duelState.currentPlayer = duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
+    duelState.currentPlayer = duelState.currentPlayer === 'player1' ? 'bot' : 'player1';
     duelState.players[duelState.currentPlayer].hasDrawn = false;
 
-    // Apply any start-of-turn buffs
     applyStartTurnBuffs();
+
+    // If bot's turn, send duelState to backend
+    if (duelState.currentPlayer === 'bot') {
+        try {
+            const response = await fetch('https://duel-bot-backend-production.up.railway.app/bot/turn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(duelState),
+            });
+
+            if (!response.ok) throw new Error(`Bot turn error: ${response.status}`);
+            const updatedState = await response.json();
+            Object.assign(duelState, updatedState);
+        } catch (err) {
+            console.error('Bot turn failed:', err);
+            alert("Bot turn failed. Check backend logs.");
+        }
+    }
 
     updateDuelUI();
 }
