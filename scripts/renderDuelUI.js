@@ -59,7 +59,8 @@ export function renderDuelUI() {
         body: JSON.stringify(summary),
       })
         .then(() => {
-          window.location.href = `https://duel-bot-backend-production.up.railway.app/summary/${duelId}`;
+          // Redirect to the summary UI after successful save
+          window.location.href = `https://duel-summary-ui-production.up.railway.app/summary.html?duelId=${duelId}`;
         })
         .catch(err => {
           console.error('Summary save failed:', err);
