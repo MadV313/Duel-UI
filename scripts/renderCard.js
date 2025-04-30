@@ -24,7 +24,7 @@ export function renderCard(cardId, isFaceDown = false) {
     } else {
         imageUrl = `images/cards/${cardData.image}`;
         cardName = cardData.name || '';
-        cardElement.classList.add(cardData.type.toLowerCase()); // e.g. 'attack', 'defense'
+        cardElement.classList.add(cardData.type.toLowerCase()); // e.g. 'attack', 'defense', 'trap'
     }
 
     // Card image
@@ -38,9 +38,18 @@ export function renderCard(cardId, isFaceDown = false) {
     nameLabel.classList.add('card-name');
     nameLabel.textContent = cardName;
 
-    // Append
     cardElement.appendChild(cardImage);
     cardElement.appendChild(nameLabel);
+
+    // Add visual effects based on tags
+    if (!isFaceDown && cardData.tags) {
+        if (cardData.tags.includes('combo_sniper') || cardData.tags.includes('combo_buff')) {
+            cardElement.classList.add('combo-glow');
+        }
+        if (cardData.tags.includes('fire') || cardData.tags.includes('explosion') || cardData.tags.includes('poison')) {
+            cardElement.classList.add('damage-glow');
+        }
+    }
 
     return cardElement;
 }
