@@ -40,12 +40,21 @@
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
     <button onclick="flipCoin()">Flip Coin</button>
+    <button onclick="loadPracticeDuel()">Load Practice Duel</button>
   </div>
 
-  <!-- Optional Piles (Add IDs if rendering later) -->
-  <!-- <div id="player1-deck" class="pile">Draw Pile</div>
+  <!-- Optional Piles (Uncomment if needed) -->
+  <!--
+  <div id="player1-deck" class="pile">Draw Pile</div>
   <div id="player1-discard" class="pile">Discard Pile</div>
   <div id="player2-deck" class="pile">Draw Pile</div>
-  <div id="player2-discard" class="pile">Discard Pile</div> -->
+  <div id="player2-discard" class="pile">Discard Pile</div>
+  -->
+
+  <!-- Inject Practice Duel Loader -->
+  <script type="module">
+    import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
+    window.loadPracticeDuel = loadPracticeDuel;
+  </script>
 </body>
 </html>
