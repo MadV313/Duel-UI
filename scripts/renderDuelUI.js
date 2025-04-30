@@ -24,12 +24,27 @@ export function renderDuelUI() {
     if (duelState.winner) {
         alert(`${duelState.winner} wins the duel!`);
         turnDisplay.textContent = `Winner: ${duelState.winner}`;
+        // TODO: trigger transition to duel summary UI here
+        return;
     }
 
-    // Placeholder for practice bot trigger (flagged for later)
+    // Live bot backend trigger
     if (duelState.currentPlayer === 'bot') {
-        console.log("Bot's turn triggered — awaiting backend connection...");
-        // Later: fetch bot move or call applyBotMove()
+        console.log("Bot's turn triggered — sending to backend...");
+
+        fetch('https://duel-bot-backend-production.up.railway.app/bot/turn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(duelState)
+        })
+        .then(res => res.json())
+        .then(updatedState => {
+            Object.assign(duelState, updatedState);
+            renderDuelUI();
+        })
+        .catch(err => {
+            console.error("Bot move failed:", err);
+        });
     }
 }
 
