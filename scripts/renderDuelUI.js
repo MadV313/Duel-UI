@@ -13,15 +13,27 @@ export function renderDuelUI() {
     renderField('player2');
 
     // Update HP display
-    document.getElementById('player1-hp').textContent = duelState.player1.hp;
-    document.getElementById('player2-hp').textContent = duelState.player2.hp;
+    document.getElementById('player1-hp').textContent = duelState.players.player1.hp;
+    document.getElementById('player2-hp').textContent = duelState.players.player2.hp;
 
     // Update turn display
     const turnDisplay = document.getElementById('turn-display');
     turnDisplay.textContent = `Turn: ${duelState.currentPlayer}`;
+
+    // Show winner if duel has ended
+    if (duelState.winner) {
+        alert(`${duelState.winner} wins the duel!`);
+        turnDisplay.textContent = `Winner: ${duelState.winner}`;
+    }
+
+    // Placeholder for practice bot trigger (flagged for later)
+    if (duelState.currentPlayer === 'bot') {
+        console.log("Bot's turn triggered — awaiting backend connection...");
+        // Later: fetch bot move or call applyBotMove()
+    }
 }
 
-// Optional: Call this once at the very beginning to initialize UI
+// Auto-init on page load
 document.addEventListener('DOMContentLoaded', () => {
     renderDuelUI();
 });
