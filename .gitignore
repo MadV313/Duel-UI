@@ -1,0 +1,21 @@
+# macOS and system files
+.DS_Store
+Thumbs.db
+
+# Logs and environments
+*.log
+.env
+
+# Node and build tools (if added later)
+node_modules/
+dist/
+.cache/
+build/
+
+# Backup or temp files
+*.bak
+*.tmp
+*.swp
+
+# Optional GitHub Pages artifacts
+_site/
