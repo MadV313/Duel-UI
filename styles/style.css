@@ -1,4 +1,14 @@
-/* General Animation Div */
+/* Background Styling */
+body {
+  margin: 0;
+  padding: 0;
+  background: url('../images/backgrounds/background_image.PNG') no-repeat center center fixed;
+  background-size: cover;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* General Animation Layer */
 .animation {
   position: fixed;
   top: 0;
@@ -9,10 +19,16 @@
   z-index: 999;
 }
 
-/* Attack Animation */
+/* Attack Animation (Melee) */
 .animation.attack {
   background: rgba(255, 0, 0, 0.3);
   animation: pulse 1s ease-out;
+}
+
+/* Gunfire Animation (Bullet) */
+.animation.bullet {
+  background: rgba(255, 255, 0, 0.2);
+  animation: flash 0.6s ease-in-out;
 }
 
 /* Heal Animation */
@@ -37,6 +53,24 @@
 .animation.poison {
   background: rgba(0, 255, 0, 0.2);
   animation: poisonPulse 1s ease-in-out;
+}
+
+/* Shield/Defense Animation */
+.animation.shield {
+  background: rgba(135, 206, 250, 0.2);
+  animation: fadeShield 1.2s ease-in-out;
+}
+
+/* Trap Activation Animation */
+.animation.trap {
+  background: rgba(128, 0, 128, 0.3);
+  animation: shake 1.2s ease-in-out;
+}
+
+/* Combo Trigger Animation */
+.animation.combo {
+  background: rgba(255, 215, 0, 0.4);
+  animation: flash 1.4s ease-in-out;
 }
 
 /* Animation Keyframes */
@@ -65,4 +99,10 @@
   0% { filter: hue-rotate(0deg); opacity: 0.5; }
   50% { filter: hue-rotate(90deg); opacity: 1; }
   100% { filter: hue-rotate(0deg); opacity: 0.5; }
+}
+
+@keyframes fadeShield {
+  0% { opacity: 0; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0; }
 }
