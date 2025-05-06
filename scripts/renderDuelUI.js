@@ -2,13 +2,16 @@ import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 
+// Check if the URL has the "spectator=true" parameter
+const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
+
 // Fully renders the current state of the Duel UI
 export function renderDuelUI() {
-  // Render hands and fields
-  renderHand('player1');
-  renderHand('player2');
-  renderField('player1');
-  renderField('player2');
+  // Render hands and fields (disabled for spectators)
+  renderHand('player1', isSpectator);  // Pass isSpectator to disable interaction
+  renderHand('player2', isSpectator);
+  renderField('player1', isSpectator); // Pass isSpectator to disable interaction
+  renderField('player2', isSpectator);
 
   // Update HP display
   document.getElementById('player1-hp').textContent = duelState.players.player1.hp;
@@ -23,8 +26,8 @@ export function renderDuelUI() {
     alert(`${duelState.winner} wins the duel!`);
     turnDisplay.textContent = `Winner: ${duelState.winner}`;
 
-    // Trigger duel summary upload and redirect
-    if (!duelState.summarySaved) {
+    // Trigger duel summary upload and redirect (if not in spectator mode)
+    if (!duelState.summarySaved && !isSpectator) {
       console.log("Saving summary and redirecting...");
 
       const duelId = `duel_${Date.now()}`;
@@ -70,8 +73,8 @@ export function renderDuelUI() {
     return; // Stop re-render loop
   }
 
-  // If it's the bot's turn, trigger backend move
-  if (duelState.currentPlayer === 'bot') {
+  // If it's the bot's turn and not a spectator, trigger backend move
+  if (duelState.currentPlayer === 'bot' && !isSpectator) {
     console.log("Bot's turn triggered — sending to backend...");
 
     fetch('https://duel-bot-backend-production.up.railway.app/bot/turn', {
