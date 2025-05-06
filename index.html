@@ -21,6 +21,9 @@
 
   <!-- Spectator View Script (for non-player observers) -->
   <script type="module" src="scripts/spectatorView.js" defer></script>
+
+  <!-- Add Spectator Styles (for non-interactive view) -->
+  <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles">
 </head>
 
 <body>
@@ -49,14 +52,6 @@
     <button onclick="loadPracticeDuel()">Load Practice Duel</button>
   </div>
 
-  <!-- Optional Piles (Uncomment if needed) -->
-  <!--
-  <div id="player1-deck" class="pile">Draw Pile</div>
-  <div id="player1-discard" class="pile">Discard Pile</div>
-  <div id="player2-deck" class="pile">Draw Pile</div>
-  <div id="player2-discard" class="pile">Discard Pile</div>
-  -->
-
   <!-- Inject Practice Duel Loader -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
@@ -71,9 +66,14 @@
     if (isSpectator) {
       // For spectators, call the spectator view render
       renderSpectatorView();
+      // Optionally hide controls or other elements for the spectator
+      document.getElementById('controls').style.display = 'none';
+      // Apply spectator-specific styles
+      document.getElementById('spectatorStyles').disabled = false;
     } else {
       // For players, call the normal duel UI render
       renderDuelUI();
+      document.getElementById('spectatorStyles').disabled = true;
     }
   </script>
 </body>
