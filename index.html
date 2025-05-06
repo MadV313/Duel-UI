@@ -18,6 +18,9 @@
   <script type="module" src="scripts/coinFlip.js" defer></script>
   <script type="module" src="scripts/duel.js" defer></script>
   <script type="module" src="scripts/buffTracker.js" defer></script>
+
+  <!-- Spectator View Script (for non-player observers) -->
+  <script type="module" src="scripts/spectatorView.js" defer></script>
 </head>
 
 <body>
@@ -38,7 +41,7 @@
   <div id="player1-field" class="field"></div>
   <div id="player1-hand" class="hand"></div>
 
-  <!-- Controls -->
+  <!-- Controls (only visible for players) -->
   <div id="controls">
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
@@ -58,6 +61,20 @@
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
     window.loadPracticeDuel = loadPracticeDuel;
+  </script>
+
+  <script>
+    // Check if the user is a spectator based on URL query parameter
+    const isSpectator = window.location.search.includes('spectator=true');
+
+    // Toggle rendering based on spectator or player mode
+    if (isSpectator) {
+      // For spectators, call the spectator view render
+      renderSpectatorView();
+    } else {
+      // For players, call the normal duel UI render
+      renderDuelUI();
+    }
   </script>
 </body>
 </html>
