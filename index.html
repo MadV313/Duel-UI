@@ -48,7 +48,7 @@
     <button id="startPracticeBtn">🎮 Start Practice Duel</button>
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
-    <button onclick="flipCoin()">Flip Coin</button>
+    <!-- <button onclick="flipCoin()">Flip Coin</button> -->
   </div>
 
   <!-- Overlay for announcements -->
@@ -92,9 +92,13 @@
 
       const startBtn = document.getElementById("startPracticeBtn");
       if (startBtn) {
-        startBtn.addEventListener("click", () => {
+        startBtn.addEventListener("click", async () => {
           console.log("🎮 Starting practice duel...");
-          loadPracticeDuel();
+          startBtn.disabled = true;
+          startBtn.textContent = "Initializing...";
+          await loadPracticeDuel();
+          await flipCoin();
+          startBtn.textContent = "✅ Practice Ready";
         });
       }
     });
