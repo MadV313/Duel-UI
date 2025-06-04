@@ -2,7 +2,9 @@
 
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
-import { triggerAnimation } from './animations.js'; // Optional animation
+import { triggerAnimation } from './animations.js';
+import { renderHand } from './renderHand.js';
+import { renderField } from './renderField.js';
 
 export async function loadPracticeDuel() {
   let data;
@@ -15,7 +17,7 @@ export async function loadPracticeDuel() {
   } catch (err) {
     console.warn('⚠️ Backend offline — loading mock data locally.');
     try {
-      const fallback = await fetch('data/mock_practice_duel.json'); // Adjust if needed
+      const fallback = await fetch('data/mock_practice_duel.json');
       if (!fallback.ok) throw new Error('Mock file not found');
       data = await fallback.json();
       console.log('✅ Loaded practice mock data from local file.');
@@ -31,7 +33,19 @@ export async function loadPracticeDuel() {
 
   // Render the duel UI
   renderDuelUI();
-  triggerAnimation('combo'); // Optional intro effect
+  triggerAnimation('combo');
+
+  // Ensure card containers are visible
+  document.getElementById("player1-hand").style.display = "flex";
+  document.getElementById("player2-hand").style.display = "flex";
+  document.getElementById("player1-field").style.display = "grid";
+  document.getElementById("player2-field").style.display = "grid";
+
+  // Re-render hands and fields
+  renderHand('player1');
+  renderHand('player2');
+  renderField('player1');
+  renderField('player2');
 
   // Update turn display
   const turnDisplay = document.getElementById('turn-display');
