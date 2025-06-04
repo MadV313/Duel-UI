@@ -10,13 +10,14 @@ export function flipCoin() {
   const winner = isHeads ? 'player1' : 'player2';
   const resultText = isHeads ? '🪙 Heads! Player 1 goes first!' : '🪙 Tails! Bot goes first!';
 
+  // Update duel state
   duelState.currentPlayer = winner;
 
   // Update turn display
   const turnDisplay = document.getElementById('turn-display');
   turnDisplay.textContent = `Turn: ${winner === 'player1' ? 'Player 1' : 'Bot'}`;
 
-  // Set up animated overlay
+  // 🔘 Show overlay announcement with result text
   const overlay = document.getElementById('announcement');
   overlay.classList.remove('hidden');
   overlay.innerHTML = `
@@ -26,14 +27,22 @@ export function flipCoin() {
     </div>
   `;
 
-  // Optional visual combo animation to signify duel start
+  // 🔘 Also show the GIF container from HTML for centered effect
+  const gifContainer = document.getElementById('coinFlipContainer');
+  if (gifContainer) {
+    gifContainer.style.display = 'block';
+  }
+
+  // Optional entrance animation (from combo system)
   triggerAnimation('combo');
 
-  // Hide after 4 seconds
+  // Cleanup visuals after 4 seconds
   setTimeout(() => {
     overlay.classList.add('hidden');
     overlay.innerHTML = '';
+    if (gifContainer) gifContainer.style.display = 'none';
   }, 4000);
 
-  renderDuelUI(); // Refresh board visuals
+  // Re-render UI after flip
+  renderDuelUI();
 }
