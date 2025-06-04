@@ -235,3 +235,75 @@ body.mock-mode #duel-ui {
   font-family: Arial, sans-serif;
   font-size: 0.9rem;
 }
+
+/* ------------------------------ */
+/* Classic Duel Layout & Buttons */
+/* ------------------------------ */
+
+/* Dark background like the original */
+body {
+  background: #000 !important;
+  background-image: none !important;
+}
+
+/* HP Display Text */
+#hp-display {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 32px;
+  color: #f0f0f0;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+/* Turn Display Text */
+#turn-display {
+  text-align: center;
+  color: #f0f0f0;
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+/* Field Grid (4x2) */
+#player1-field, #player2-field {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  justify-content: center;
+  margin: 8px auto 16px auto;
+  max-width: 440px;
+}
+
+/* Hand Row (up to 4 cards) */
+#player1-hand, #player2-hand {
+  display: flex !important;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* Action Bar Buttons (classic yellow layout) */
+#controls {
+  display: flex !important;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+#controls button {
+  background-color: #facc15;
+  border: none;
+  padding: 10px 16px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #000;
+  font-size: 0.95rem;
+  box-shadow: 0 0 6px #fff2;
+  transition: transform 0.2s ease;
+}
+
+#controls button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 10px #facc15;
+}
