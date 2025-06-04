@@ -1,3 +1,4 @@
+// renderDuelUI.js
 import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
@@ -14,17 +15,24 @@ export function renderDuelUI() {
   renderField('player2', isSpectator);
 
   // Update HP display
-  document.getElementById('player1-hp').textContent = duelState.players.player1.hp;
-  document.getElementById('player2-hp').textContent = duelState.players.player2.hp;
+  const p1hp = document.getElementById('player1-hp');
+  const p2hp = document.getElementById('player2-hp');
+  if (p1hp && p2hp) {
+    p1hp.textContent = duelState.players.player1.hp;
+    p2hp.textContent = duelState.players.player2.hp;
+  }
 
   // Update turn display
   const turnDisplay = document.getElementById('turn-display');
-  turnDisplay.textContent = `Turn: ${duelState.currentPlayer}`;
+  if (turnDisplay) {
+    turnDisplay.textContent = duelState.winner
+      ? `Winner: ${duelState.winner}`
+      : `Turn: ${duelState.currentPlayer}`;
+  }
 
   // Check for winner
   if (duelState.winner) {
     alert(`${duelState.winner} wins the duel!`);
-    turnDisplay.textContent = `Winner: ${duelState.winner}`;
 
     // Trigger duel summary upload and redirect (if not in spectator mode)
     if (!duelState.summarySaved && !isSpectator) {
@@ -62,7 +70,6 @@ export function renderDuelUI() {
         body: JSON.stringify(summary),
       })
         .then(() => {
-          // Redirect to the summary UI after successful save
           window.location.href = `https://duel-summary-ui-production.up.railway.app/summary.html?duelId=${duelId}`;
         })
         .catch(err => {
