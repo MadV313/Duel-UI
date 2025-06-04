@@ -18,8 +18,6 @@
   <script type="module" src="scripts/coinFlip.js" defer></script>
   <script type="module" src="scripts/duel.js" defer></script>
   <script type="module" src="scripts/buffTracker.js" defer></script>
-
-  <!-- Spectator View Script -->
   <script type="module" src="scripts/spectatorView.js" defer></script>
 
   <!-- Spectator Styles -->
@@ -47,11 +45,10 @@
 
   <!-- Controls -->
   <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
-    <button id="startPracticeBtn" onclick="loadPracticeDuel()">🎮 Start Practice Duel</button>
+    <button id="startPracticeBtn">🎮 Start Practice Duel</button>
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
     <button onclick="flipCoin()">Flip Coin</button>
-    <button onclick="loadPracticeDuel()">Load Practice Duel</button>
   </div>
 
   <!-- Overlay for announcements -->
@@ -62,39 +59,45 @@
     <img src="images/coinflip.gif" alt="Coin Flip" style="width: 120px; height: 120px;" />
   </div>
 
-  <!-- Duel Logic Binding -->
+  <!-- Inline Script Bindings -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
-    window.loadPracticeDuel = loadPracticeDuel;
-  </script>
-
-  <script type="module">
     import { flipCoin } from './scripts/coinFlip.js';
+    import { renderDuelUI } from './scripts/renderDuelUI.js';
+    import { renderSpectatorView } from './scripts/spectatorView.js';
+
     window.flipCoin = flipCoin;
-  </script>
+    window.loadPracticeDuel = loadPracticeDuel;
 
-  <!-- Mode Switching -->
-  <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const isSpectator = urlParams.get('spectator') === 'true';
-    const isMock = urlParams.get('mock') === 'true';
+    document.addEventListener("DOMContentLoaded", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isSpectator = urlParams.get('spectator') === 'true';
+      const isMock = urlParams.get('mock') === 'true';
 
-    if (isSpectator) {
-      renderSpectatorView();
-      document.getElementById('controls').style.display = 'none';
-      document.getElementById('spectatorStyles').disabled = false;
-    } else {
-      renderDuelUI();
-      document.getElementById('spectatorStyles').disabled = true;
-    }
+      if (isSpectator) {
+        renderSpectatorView();
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('spectatorStyles').disabled = false;
+      } else {
+        document.getElementById('spectatorStyles').disabled = true;
+      }
 
-    if (isMock) {
-      document.getElementById("controls").style.display = "flex";
-      document.getElementById("player1-hand").style.display = "flex";
-      document.getElementById("player2-hand").style.display = "flex";
-      document.getElementById("player1-field").style.display = "flex";
-      document.getElementById("player2-field").style.display = "flex";
-    }
+      if (isMock) {
+        document.getElementById("controls").style.display = "flex";
+        document.getElementById("player1-hand").style.display = "flex";
+        document.getElementById("player2-hand").style.display = "flex";
+        document.getElementById("player1-field").style.display = "flex";
+        document.getElementById("player2-field").style.display = "flex";
+      }
+
+      const startBtn = document.getElementById("startPracticeBtn");
+      if (startBtn) {
+        startBtn.addEventListener("click", () => {
+          console.log("🎮 Starting practice duel...");
+          loadPracticeDuel();
+        });
+      }
+    });
   </script>
 </body>
 </html>
