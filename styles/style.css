@@ -269,8 +269,10 @@ body.mock-mode #duel-ui {
 #controls {
   display: flex !important;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 20px;
+  margin: 20px auto;
+  max-width: 600px;
 }
 
 #controls button {
