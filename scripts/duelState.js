@@ -1,5 +1,7 @@
 // duelState.js
 
+import { renderDuelUI } from './renderDuelUI.js';
+
 export const duelState = {
   players: {
     player1: {
@@ -38,7 +40,7 @@ export async function initializeLiveDuel(player1Id, player2Id) {
   }
 }
 
-// ✅ Practice mode: mock card IDs only
+// ✅ Practice mode: mock card objects
 export function initializePracticeDuel() {
   const getRandomCards = () => {
     const ids = new Set();
@@ -46,7 +48,10 @@ export function initializePracticeDuel() {
       const id = String(Math.floor(Math.random() * 127) + 1).padStart(3, '0');
       ids.add(id);
     }
-    return Array.from(ids);
+    return Array.from(ids).map(cardId => ({
+      cardId,
+      isFaceDown: false
+    }));
   };
 
   duelState.players = {
@@ -69,10 +74,10 @@ export function initializePracticeDuel() {
   duelState.currentPlayer = 'player1';
   duelState.winner = null;
 
-  console.log("🧪 Practice duel initialized with random decks.");
+  console.log("🧪 Practice duel initialized with random card objects.");
 }
 
-// 👇 These are UI-linked helpers (no need to change yet)
+// 👇 These are UI-linked helpers
 
 export function drawCard(player) {
   const p = duelState.players[player];
