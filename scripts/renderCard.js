@@ -1,9 +1,10 @@
 // renderCard.js — handles visual rendering of cards for hand/field
-import cardsData from './CoreMasterReference.json';
+import allCards from './allCards.js';
 
 // Fetch full card object by ID
 export function getCardById(cardId) {
-    return cardsData.find(card => card.card_id === cardId);
+    const idStr = typeof cardId === 'number' ? String(cardId).padStart(3, '0') : cardId;
+    return allCards.find(card => card.card_id === idStr);
 }
 
 // Render a card for hand or field
@@ -21,10 +22,15 @@ export function renderCard(cardId, isFaceDown = false) {
         imageUrl = `images/cards/${faceDownCard.image}`;
         cardName = ''; // Optional: "Face-Down"
         cardElement.classList.add('face-down');
-    } else {
+    } else if (cardData) {
         imageUrl = `images/cards/${cardData.image}`;
         cardName = cardData.name || '';
         cardElement.classList.add(cardData.type.toLowerCase()); // e.g. 'attack', 'defense', 'trap'
+    } else {
+        imageUrl = 'images/cards/000_WinterLand_Death_Deck.png';
+        cardName = 'Unknown';
+        cardElement.classList.add('unknown');
+        console.warn(`Card ID ${cardId} not found in allCards.js`);
     }
 
     // Card image
@@ -42,7 +48,7 @@ export function renderCard(cardId, isFaceDown = false) {
     cardElement.appendChild(nameLabel);
 
     // Add visual effects based on tags
-    if (!isFaceDown && cardData.tags) {
+    if (!isFaceDown && cardData?.tags) {
         if (cardData.tags.includes('combo_sniper') || cardData.tags.includes('combo_buff')) {
             cardElement.classList.add('combo-glow');
         }
