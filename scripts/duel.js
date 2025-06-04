@@ -3,9 +3,7 @@ import { duelState } from './duelState.js';
 import { updateDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
-
-// ✅ Card metadata loader (for converting ID to card object when drawn)
-import allCards from '../data/all_cards.json' assert { type: 'json' };
+import { allCards } from './allCards.js'; // ✅ Now using JS module instead of JSON assert
 
 export async function drawCard() {
     const playerId = duelState.currentPlayer;
@@ -28,7 +26,7 @@ export async function drawCard() {
     const cardId = deck.shift();
     const cardData = allCards.find(card => card.cardId === cardId);
     if (!cardData) {
-        console.warn(`Card ID ${cardId} not found in all_cards.json`);
+        console.warn(`Card ID ${cardId} not found in allCards.js`);
         return;
     }
 
