@@ -21,7 +21,7 @@ export const duelState = {
   winner: null
 };
 
-// Initialize decks from backend (live duel)
+// ✅ Live duel loading from backend
 export async function initializeLiveDuel(player1Id, player2Id) {
   try {
     const res = await fetch('https://duel-bot-backend-production.up.railway.app/bot/startDuel', {
@@ -38,20 +38,32 @@ export async function initializeLiveDuel(player1Id, player2Id) {
   }
 }
 
-// Practice mode: generate mock decks (bypasses saved decks)
+// ✅ Practice mode: mock card IDs only
 export function initializePracticeDuel() {
   const getRandomCards = () => {
-    const cards = [];
-    while (cards.length < 20) {
+    const ids = new Set();
+    while (ids.size < 20) {
       const id = String(Math.floor(Math.random() * 127) + 1).padStart(3, '0');
-      cards.push({ cardId: id, isFaceDown: false });
+      ids.add(id);
     }
-    return cards;
+    return Array.from(ids);
   };
 
   duelState.players = {
-    player1: { hp: 200, hand: [], field: [], deck: getRandomCards(), discardPile: [] },
-    player2: { hp: 200, hand: [], field: [], deck: getRandomCards(), discardPile: [] }
+    player1: {
+      hp: 200,
+      hand: [],
+      field: [],
+      deck: getRandomCards(),
+      discardPile: []
+    },
+    player2: {
+      hp: 200,
+      hand: [],
+      field: [],
+      deck: getRandomCards(),
+      discardPile: []
+    }
   };
 
   duelState.currentPlayer = 'player1';
@@ -59,6 +71,8 @@ export function initializePracticeDuel() {
 
   console.log("🧪 Practice duel initialized with random decks.");
 }
+
+// 👇 These are UI-linked helpers (no need to change yet)
 
 export function drawCard(player) {
   const p = duelState.players[player];
