@@ -4,8 +4,22 @@ body {
   padding: 0;
   background: url('../images/backgrounds/background_image.PNG') no-repeat center center fixed;
   background-size: cover;
+  background-color: #000;
   font-family: Arial, sans-serif;
   overflow: hidden;
+}
+
+/* Snowfall GIF Overlay */
+.snowfall {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: url('../images/effects/snowfall.gif') center center / cover no-repeat;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.5;
 }
 
 /* General Animation Layer */
@@ -107,10 +121,7 @@ body {
   100% { opacity: 0; }
 }
 
-/* ----------------------------- */
-/* Card UI & Field Styling Below */
-/* ----------------------------- */
-
+/* Card UI */
 .card {
   display: inline-block;
   margin: 6px;
@@ -166,19 +177,7 @@ body {
   100% { box-shadow: 0 0 0 gold; }
 }
 
-/* Field/Hand Containers */
-#player1-hand, #player2-hand,
-#player1-field, #player2-field {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-/* ------------------------------ */
 /* Coin Flip Overlay + Animation */
-/* ------------------------------ */
-
 .coin-flip-container {
   display: flex;
   flex-direction: column;
@@ -215,9 +214,7 @@ body {
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* ------------------------------ */
-/* Mock Mode Support              */
-/* ------------------------------ */
+/* Mock Mode Support */
 body.mock-mode #duel-ui {
   display: block !important;
 }
@@ -236,17 +233,7 @@ body.mock-mode #duel-ui {
   font-size: 0.9rem;
 }
 
-/* ------------------------------ */
 /* Classic Duel Layout & Buttons */
-/* ------------------------------ */
-
-/* Dark background like the original */
-body {
-  background: #000 !important;
-  background-image: none !important;
-}
-
-/* HP Display Text */
 #hp-display {
   display: flex;
   justify-content: space-between;
@@ -256,7 +243,6 @@ body {
   font-weight: bold;
 }
 
-/* Turn Display Text */
 #turn-display {
   text-align: center;
   color: #f0f0f0;
@@ -264,7 +250,6 @@ body {
   margin-bottom: 8px;
 }
 
-/* Field Grid (4x2) */
 #player1-field, #player2-field {
   display: grid !important;
   grid-template-columns: repeat(4, 1fr);
@@ -274,7 +259,6 @@ body {
   max-width: 440px;
 }
 
-/* Hand Row (up to 4 cards) */
 #player1-hand, #player2-hand {
   display: flex !important;
   justify-content: center;
@@ -282,7 +266,6 @@ body {
   margin-bottom: 16px;
 }
 
-/* Action Bar Buttons (classic yellow layout) */
 #controls {
   display: flex !important;
   justify-content: center;
