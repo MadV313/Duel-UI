@@ -1,7 +1,7 @@
 // buffTracker.js — handles start-of-turn continuous buffs
 import { duelState } from './duelState.js';
 import { updateDuelUI } from './renderDuelUI.js';
-import { triggerAnimation } from './animations.js'; // Add animation trigger support
+import { triggerAnimation, triggerAnimationByCard } from './animations.js'; // ✅ Expanded
 
 export function applyStartTurnBuffs() {
     const playerId = duelState.currentPlayer;
@@ -15,6 +15,9 @@ export function applyStartTurnBuffs() {
         player.hand.push(bonusCard);
         console.log("BuffTracker: Assault Backpack (#054) granted 1 extra card.");
         buffTriggered = true;
+
+        // ✅ Optional visual test
+        triggerAnimationByCard('054');
     }
 
     // --- Tactical Backpack (#056) ---
@@ -23,11 +26,14 @@ export function applyStartTurnBuffs() {
         player.hand.push(bonusLoot);
         console.log("BuffTracker: Tactical Backpack (#056) granted 1 bonus loot card.");
         buffTriggered = true;
+
+        // ✅ Optional visual test
+        triggerAnimationByCard('056');
     }
 
-    // Optional: trigger animation if any buff was applied
+    // Optional: trigger generic animation if any buff was applied
     if (buffTriggered) {
-        triggerAnimation('heal'); // Visualize the buff
+        triggerAnimation('heal'); // 🌟 Visualize the buff with a healing aura
     }
 
     updateDuelUI();
