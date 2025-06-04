@@ -4,16 +4,20 @@ import { updateDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 
+// ✅ Card metadata loader (for converting ID to card object when drawn)
+import allCards from '../data/all_cards.json' assert { type: 'json' };
+
 export async function drawCard() {
     const playerId = duelState.currentPlayer;
     const player = duelState.players[playerId];
+    const deck = duelState[`deck${playerId === 'player1' ? '1' : '2'}`];
 
     if (player.hand.length >= 4) {
         alert("Hand full! Play or discard a card first.");
         return;
     }
 
-    if (duelState.deck.length === 0) {
+    if (deck.length === 0) {
         alert("Deck empty! You suffer stamina loss!");
         player.hp -= 20;
         if (player.hp < 0) player.hp = 0;
@@ -21,22 +25,39 @@ export async function drawCard() {
         return;
     }
 
-    const drawnCard = duelState.deck.shift();
-    player.hand.push(drawnCard);
-    console.log(`Player ${playerId} drew card: ${drawnCard.name}`);
-
-    if (player.field.includes('054') && duelState.deck.length > 0 && player.hand.length < 4) {
-        const bonusCard = duelState.deck.shift();
-        player.hand.push(bonusCard);
-        console.log("Assault Backpack active: Drew extra card.");
-        triggerAnimation('heal');
+    const cardId = deck.shift();
+    const cardData = allCards.find(card => card.cardId === cardId);
+    if (!cardData) {
+        console.warn(`Card ID ${cardId} not found in all_cards.json`);
+        return;
     }
 
-    if (player.field.includes('056') && duelState.lootPile.length > 0 && player.hand.length < 4) {
-        const bonusLootCard = duelState.lootPile.shift();
-        player.hand.push(bonusLootCard);
-        console.log("Tactical Backpack active: Drew bonus loot card.");
-        triggerAnimation('heal');
+    player.hand.push(cardData);
+    console.log(`Player ${playerId} drew card: ${cardData.filename}`);
+
+    // 🎒 Assault Backpack (Card #054)
+    const hasAssaultBackpack = player.field.some(card => card.cardId === 54);
+    if (hasAssaultBackpack && deck.length > 0 && player.hand.length < 4) {
+        const bonusCardId = deck.shift();
+        const bonusCardData = allCards.find(card => card.cardId === bonusCardId);
+        if (bonusCardData) {
+            player.hand.push(bonusCardData);
+            console.log("Assault Backpack active: Drew extra card.");
+            triggerAnimation('heal');
+        }
+    }
+
+    // 🎒 Tactical Backpack (Card #056)
+    const lootPile = duelState.lootPile || [];
+    const hasTacticalBackpack = player.field.some(card => card.cardId === 56);
+    if (hasTacticalBackpack && lootPile.length > 0 && player.hand.length < 4) {
+        const lootCardId = lootPile.shift();
+        const lootCardData = allCards.find(card => card.cardId === lootCardId);
+        if (lootCardData) {
+            player.hand.push(lootCardData);
+            console.log("Tactical Backpack active: Drew bonus loot card.");
+            triggerAnimation('heal');
+        }
     }
 
     updateDuelUI();
@@ -48,7 +69,6 @@ export async function endTurn() {
 
     applyStartTurnBuffs();
 
-    // If bot's turn, send duelState to backend
     if (duelState.currentPlayer === 'bot') {
         try {
             const response = await fetch('https://duel-bot-backend-production.up.railway.app/bot/turn', {
@@ -71,6 +91,7 @@ export async function endTurn() {
 
 export async function discardCard(playerId, cardIndex) {
     const player = duelState.players[playerId];
+    const discardPile = duelState[`discard${playerId === 'player1' ? '1' : '2'}`];
 
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
         alert("Invalid card selection.");
@@ -78,9 +99,8 @@ export async function discardCard(playerId, cardIndex) {
     }
 
     const discardedCard = player.hand.splice(cardIndex, 1)[0];
-    duelState.discardPile.push(discardedCard);
+    discardPile.push(discardedCard);
 
-    console.log(`Player ${playerId} discarded a card: ${discardedCard.name || "Unnamed Card"}`);
-
+    console.log(`Player ${playerId} discarded: ${discardedCard.filename || "Unnamed Card"}`);
     updateDuelUI();
 }
