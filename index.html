@@ -44,13 +44,23 @@
   <div id="player1-field" class="field"></div>
   <div id="player1-hand" class="hand"></div>
 
+    <!-- Duel Controls -->
+<div id="controls">
+
+    <!-- 🔘 NEW: Start Practice Duel Button (top priority for UI) -->
+  <div style="margin-bottom: 12px;">
+    <button onclick="loadPracticeDuel()">🎮 Start Practice Duel</button>
+  </div>
+  
   <!-- Controls (only visible for players) -->
-  <div id="controls">
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
     <button onclick="flipCoin()">Flip Coin</button>
     <button onclick="loadPracticeDuel()">Load Practice Duel</button>
   </div>
+
+  <!-- Overlay display area for coin flip result -->
+  <div id="announcement" class="overlay hidden"></div>
 
   <!-- Inject Practice Duel Loader -->
   <script type="module">
@@ -58,20 +68,20 @@
     window.loadPracticeDuel = loadPracticeDuel;
   </script>
 
-  <script>
-    // Check if the user is a spectator based on URL query parameter
-    const isSpectator = window.location.search.includes('spectator=true');
+  <!-- Inject Coin Flip Logic -->
+  <script type="module">
+    import { flipCoin } from './scripts/coinFlip.js';
+    window.flipCoin = flipCoin;
+  </script>
 
-    // Toggle rendering based on spectator or player mode
+  <!-- Spectator Detection & Conditional Rendering -->
+  <script>
+    const isSpectator = window.location.search.includes('spectator=true');
     if (isSpectator) {
-      // For spectators, call the spectator view render
       renderSpectatorView();
-      // Optionally hide controls or other elements for the spectator
       document.getElementById('controls').style.display = 'none';
-      // Apply spectator-specific styles
       document.getElementById('spectatorStyles').disabled = false;
     } else {
-      // For players, call the normal duel UI render
       renderDuelUI();
       document.getElementById('spectatorStyles').disabled = true;
     }
