@@ -45,11 +45,9 @@
   <div id="player1-hand" class="hand"></div>
 
   <!-- Duel Controls -->
-  <div id="controls">
-    <!-- 🔘 Practice Duel Button (conditionally shown) -->
-    <div style="margin-bottom: 12px;">
-      <button id="startPracticeBtn" onclick="loadPracticeDuel()" style="display: none;">🎮 Start Practice Duel</button>
-    </div>
+  <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
+    <!-- 🔘 Practice Duel Button (always shown for now) -->
+    <button id="startPracticeBtn" onclick="loadPracticeDuel()">🎮 Start Practice Duel</button>
 
     <!-- Controls (only visible for players) -->
     <button onclick="drawCard()">Draw</button>
@@ -81,13 +79,8 @@
   <!-- Toggle Modes & Fallback UI -->
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const isPractice = urlParams.get('practice') === 'true';
     const isSpectator = urlParams.get('spectator') === 'true';
     const isMock = urlParams.get('mock') === 'true';
-
-    if (isPractice) {
-      document.getElementById("startPracticeBtn").style.display = "inline-block";
-    }
 
     if (isSpectator) {
       renderSpectatorView();
@@ -100,12 +93,8 @@
 
     // Force visible state for mock/debug mode
     if (isMock) {
-      document.getElementById("controls").style.display = "block";
+      document.getElementById("controls").style.display = "flex";
       document.getElementById("player1-hand").style.display = "flex";
       document.getElementById("player2-hand").style.display = "flex";
       document.getElementById("player1-field").style.display = "flex";
-      document.getElementById("player2-field").style.display = "flex";
-    }
-  </script>
-</body>
-</html>
+      document.getElementBy
