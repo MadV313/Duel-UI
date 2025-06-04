@@ -214,3 +214,24 @@ body {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+/* ------------------------------ */
+/* Mock Mode Support              */
+/* ------------------------------ */
+body.mock-mode #duel-ui {
+  display: block !important;
+}
+
+#mock-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1001;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid #00ffff;
+  border-radius: 8px;
+  padding: 10px;
+  color: #00ffff;
+  font-family: Arial, sans-serif;
+  font-size: 0.9rem;
+}
