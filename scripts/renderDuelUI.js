@@ -99,8 +99,3 @@ export function renderDuelUI() {
       });
   }
 }
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-  renderDuelUI();
-});
