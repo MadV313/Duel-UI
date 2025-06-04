@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -46,7 +46,6 @@
 
   <!-- Duel Controls -->
   <div id="controls">
-
     <!-- 🔘 Practice Duel Button (conditionally shown) -->
     <div style="margin-bottom: 12px;">
       <button id="startPracticeBtn" onclick="loadPracticeDuel()" style="display: none;">🎮 Start Practice Duel</button>
@@ -79,17 +78,17 @@
     window.flipCoin = flipCoin;
   </script>
 
-  <!-- Practice Mode Button Visibility -->
+  <!-- Toggle Modes & Fallback UI -->
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('practice') === 'true') {
+    const isPractice = urlParams.get('practice') === 'true';
+    const isSpectator = urlParams.get('spectator') === 'true';
+    const isMock = urlParams.get('mock') === 'true';
+
+    if (isPractice) {
       document.getElementById("startPracticeBtn").style.display = "inline-block";
     }
-  </script>
 
-  <!-- Spectator Detection & Conditional Rendering -->
-  <script>
-    const isSpectator = window.location.search.includes('spectator=true');
     if (isSpectator) {
       renderSpectatorView();
       document.getElementById('controls').style.display = 'none';
@@ -97,6 +96,15 @@
     } else {
       renderDuelUI();
       document.getElementById('spectatorStyles').disabled = true;
+    }
+
+    // Force visible state for mock/debug mode
+    if (isMock) {
+      document.getElementById("controls").style.display = "block";
+      document.getElementById("player1-hand").style.display = "flex";
+      document.getElementById("player2-hand").style.display = "flex";
+      document.getElementById("player1-field").style.display = "flex";
+      document.getElementById("player2-field").style.display = "flex";
     }
   </script>
 </body>
