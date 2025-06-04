@@ -15,7 +15,7 @@ export async function loadPracticeDuel() {
   } catch (err) {
     console.warn('⚠️ Backend offline — loading mock data locally.');
     try {
-      const fallback = await fetch('data/mock_practice_duel.json'); // Adjust path if needed
+      const fallback = await fetch('data/mock_practice_duel.json'); // Adjust if needed
       if (!fallback.ok) throw new Error('Mock file not found');
       data = await fallback.json();
       console.log('✅ Loaded practice mock data from local file.');
@@ -33,12 +33,12 @@ export async function loadPracticeDuel() {
   renderDuelUI();
   triggerAnimation('combo'); // Optional intro effect
 
-  // Show turn info
+  // Update turn display
   const turnDisplay = document.getElementById('turn-display');
   if (turnDisplay) {
     const label = duelState.currentPlayer === 'player1' ? 'Player 1' : 'Bot';
     turnDisplay.textContent = `Turn: ${label}`;
   }
 
-  console.log('Practice duel rendered.');
+  console.log('🎮 Practice duel rendered.');
 }
