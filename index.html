@@ -19,64 +19,61 @@
   <script type="module" src="scripts/duel.js" defer></script>
   <script type="module" src="scripts/buffTracker.js" defer></script>
 
-  <!-- Spectator View Script (for non-player observers) -->
+  <!-- Spectator View Script -->
   <script type="module" src="scripts/spectatorView.js" defer></script>
 
-  <!-- Add Spectator Styles (for non-interactive view) -->
+  <!-- Spectator Styles -->
   <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles">
 </head>
 
 <body>
-  <div id="background"></div>
+  <!-- ❄️ Snowfall overlay -->
+  <div class="snowfall"></div>
 
-  <!-- Player 2 (Opponent) Top -->
+  <!-- Player 2 (Opponent) -->
   <div id="player2-hand" class="hand"></div>
   <div id="player2-field" class="field"></div>
 
-  <!-- HP & Turn Display -->
+  <!-- HP & Turn Info -->
   <div id="hp-display">
     <div>Challenger HP: <span id="player1-hp">200</span></div>
     <div>Opponent HP: <span id="player2-hp">200</span></div>
   </div>
   <div id="turn-display"></div>
 
-  <!-- Player 1 (Challenger) Bottom -->
+  <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
   <div id="player1-hand" class="hand"></div>
 
-  <!-- Duel Controls -->
+  <!-- Controls -->
   <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
-    <!-- 🔘 Practice Duel Button (always shown for now) -->
     <button id="startPracticeBtn" onclick="loadPracticeDuel()">🎮 Start Practice Duel</button>
-
-    <!-- Controls (only visible for players) -->
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
     <button onclick="flipCoin()">Flip Coin</button>
     <button onclick="loadPracticeDuel()">Load Practice Duel</button>
   </div>
 
-  <!-- Overlay display area for coin flip result -->
+  <!-- Overlay for announcements -->
   <div id="announcement" class="overlay hidden"></div>
 
-  <!-- Coin Flip Animation Container -->
+  <!-- Coin Flip Animation -->
   <div id="coinFlipContainer" style="display:none; position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 9999;">
     <img src="images/coinflip.gif" alt="Coin Flip" style="width: 120px; height: 120px;" />
   </div>
 
-  <!-- Inject Practice Duel Loader -->
+  <!-- Duel Logic Binding -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
     window.loadPracticeDuel = loadPracticeDuel;
   </script>
 
-  <!-- Inject Coin Flip Logic -->
   <script type="module">
     import { flipCoin } from './scripts/coinFlip.js';
     window.flipCoin = flipCoin;
   </script>
 
-  <!-- Toggle Modes & Fallback UI -->
+  <!-- Mode Switching -->
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const isSpectator = urlParams.get('spectator') === 'true';
@@ -91,10 +88,13 @@
       document.getElementById('spectatorStyles').disabled = true;
     }
 
-    // Force visible state for mock/debug mode
     if (isMock) {
       document.getElementById("controls").style.display = "flex";
       document.getElementById("player1-hand").style.display = "flex";
       document.getElementById("player2-hand").style.display = "flex";
       document.getElementById("player1-field").style.display = "flex";
-      document.getElementBy
+      document.getElementById("player2-field").style.display = "flex";
+    }
+  </script>
+</body>
+</html>
