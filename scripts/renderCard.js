@@ -27,7 +27,8 @@ export function renderCard(cardId, isFaceDown = false) {
         cardName = cardData.name || '';
         cardElement.classList.add(cardData.type.toLowerCase()); // e.g. 'attack', 'defense', 'trap'
     } else {
-        imageUrl = 'images/cards/000_WinterLand_Death_Deck.png';
+        const fallbackCard = getCardById('000');
+        imageUrl = `images/cards/${fallbackCard.image}`;
         cardName = 'Unknown';
         cardElement.classList.add('unknown');
         console.warn(`Card ID ${cardId} not found in allCards.js`);
