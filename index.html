@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -44,15 +44,15 @@
   <div id="player1-field" class="field"></div>
   <div id="player1-hand" class="hand"></div>
 
-    <!-- Duel Controls -->
-<div id="controls">
+  <!-- Duel Controls -->
+  <div id="controls">
 
-    <!-- 🔘 NEW: Start Practice Duel Button (top priority for UI) -->
-  <div style="margin-bottom: 12px;">
-    <button onclick="loadPracticeDuel()">🎮 Start Practice Duel</button>
-  </div>
-  
-  <!-- Controls (only visible for players) -->
+    <!-- 🔘 Practice Duel Button (conditionally shown) -->
+    <div style="margin-bottom: 12px;">
+      <button id="startPracticeBtn" onclick="loadPracticeDuel()" style="display: none;">🎮 Start Practice Duel</button>
+    </div>
+
+    <!-- Controls (only visible for players) -->
     <button onclick="drawCard()">Draw</button>
     <button onclick="endTurn()">End Turn</button>
     <button onclick="flipCoin()">Flip Coin</button>
@@ -61,6 +61,11 @@
 
   <!-- Overlay display area for coin flip result -->
   <div id="announcement" class="overlay hidden"></div>
+
+  <!-- Coin Flip Animation Container -->
+  <div id="coinFlipContainer" style="display:none; position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 9999;">
+    <img src="images/coinflip.gif" alt="Coin Flip" style="width: 120px; height: 120px;" />
+  </div>
 
   <!-- Inject Practice Duel Loader -->
   <script type="module">
@@ -72,6 +77,14 @@
   <script type="module">
     import { flipCoin } from './scripts/coinFlip.js';
     window.flipCoin = flipCoin;
+  </script>
+
+  <!-- Practice Mode Button Visibility -->
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('practice') === 'true') {
+      document.getElementById("startPracticeBtn").style.display = "inline-block";
+    }
   </script>
 
   <!-- Spectator Detection & Conditional Rendering -->
