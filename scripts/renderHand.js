@@ -7,22 +7,28 @@ export function renderHand(player, isSpectator = false) {
   const handContainer = document.getElementById(`${player}-hand`);
   if (!handContainer) return;
 
-  handContainer.innerHTML = ''; // Clear current hand
+  handContainer.innerHTML = '';
 
-  const hand = duelState.players[player].hand;
+  const hand = duelState.players[player]?.hand;
+
+  console.log(`🖐️ Rendering hand for ${player}:`, hand);
+
+  if (!Array.isArray(hand)) {
+    console.warn(`⚠️ No hand array for ${player}`);
+    return;
+  }
 
   hand.forEach((card, index) => {
-    const cardId = card.cardId || card.card_id || card; // supports ID strings or card objects
+    const cardId = card.cardId || card.card_id || card;
     const isFaceDown = card.isFaceDown || false;
 
     const cardElement = renderCard(cardId, isFaceDown);
 
-    // Development: allow manual removal during testing
     if (!isSpectator) {
       cardElement.addEventListener('click', () => {
         if (confirm(`Discard this card from ${player}'s hand?`)) {
           duelState.players[player].hand.splice(index, 1);
-          renderHand(player, isSpectator); // Re-render hand
+          renderHand(player, isSpectator);
         }
       });
     }
