@@ -3,23 +3,30 @@ import { renderCard } from './renderCard.js';
 import { duelState } from './duelState.js';
 
 // Render the hand for a given player
-export function renderHand(player) {
-    const handContainer = document.getElementById(`${player}-hand`);
-    handContainer.innerHTML = ''; // Clear current hand
+export function renderHand(player, isSpectator = false) {
+  const handContainer = document.getElementById(`${player}-hand`);
+  if (!handContainer) return;
 
-    const hand = duelState.players[player].hand;
+  handContainer.innerHTML = ''; // Clear current hand
 
-    hand.forEach(card => {
-        const cardId = card.cardId || card.card_id || card; // supports ID strings or card objects
-        const isFaceDown = card.isFaceDown || false;
+  const hand = duelState.players[player].hand;
 
-        const cardElement = renderCard(cardId, isFaceDown);
+  hand.forEach((card, index) => {
+    const cardId = card.cardId || card.card_id || card; // supports ID strings or card objects
+    const isFaceDown = card.isFaceDown || false;
 
-        // Optionally: add interaction buttons in the future
-        // const playBtn = document.createElement('button');
-        // playBtn.textContent = 'Play';
-        // cardElement.appendChild(playBtn);
+    const cardElement = renderCard(cardId, isFaceDown);
 
-        handContainer.appendChild(cardElement);
-    });
+    // Development: allow manual removal during testing
+    if (!isSpectator) {
+      cardElement.addEventListener('click', () => {
+        if (confirm(`Discard this card from ${player}'s hand?`)) {
+          duelState.players[player].hand.splice(index, 1);
+          renderHand(player, isSpectator); // Re-render hand
+        }
+      });
+    }
+
+    handContainer.appendChild(cardElement);
+  });
 }
