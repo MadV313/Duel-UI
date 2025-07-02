@@ -105,7 +105,35 @@ h1, h2 {
 #hp-display {
   display: flex;
   justify-content: space-between;
-  font-size: 18px;
+  padding: 12px 80px;       /* moved text away from edges */
+  color: #f0f0f0;
+  font-size: 2.2rem;        /* roughly double of 1.1rem */
+  font-weight: bold;
+}
+
+#health-bars {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 80px;
+  gap: 40px;
+  margin-top: -10px;
+  margin-bottom: 20px;
+}
+
+.health-bar-container {
+  flex: 1;
+  height: 20px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 2px solid #444;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.health-bar {
+  height: 100%;
+  width: 100%; /* This will shrink via JS */
+  background: linear-gradient(to right, limegreen, gold);
+  transition: width 0.3s ease;
 }
 
 /* Hover Animations */
@@ -137,14 +165,148 @@ h1, h2 {
   z-index: 999;
 }
 
+/* Attack Animation (Melee) */
 .animation.attack {
   background: rgba(255, 0, 0, 0.3);
   animation: pulse 1s ease-out;
 }
 
+/* Gunfire Animation (Bullet) */
 .animation.bullet {
   background: rgba(255, 255, 0, 0.2);
-  animation: pulse 0.6s ease-in-out;
+  animation: flash 0.6s ease-in-out;
+}
+
+/* Heal Animation */
+.animation.heal {
+  background: rgba(0, 255, 0, 0.3);
+  animation: pulse 1s ease-out;
+}
+
+/* Fire Animation */
+.animation.fire {
+  background: rgba(255, 69, 0, 0.3);
+  animation: shake 1s ease-in-out;
+}
+
+/* Explosion Animation */
+.animation.explosion {
+  background: rgba(255, 165, 0, 0.5);
+  animation: flash 1s ease-out;
+}
+
+/* Poison Animation */
+.animation.poison {
+  background: rgba(0, 255, 0, 0.2);
+  animation: poisonPulse 1s ease-in-out;
+}
+
+/* Shield/Defense Animation */
+.animation.shield {
+  background: rgba(135, 206, 250, 0.2);
+  animation: fadeShield 1.2s ease-in-out;
+}
+
+/* Trap Activation Animation */
+.animation.trap {
+  background: rgba(128, 0, 128, 0.3);
+  animation: shake 1.2s ease-in-out;
+}
+
+/* Combo Trigger Animation */
+.animation.combo {
+  background: rgba(255, 215, 0, 0.4);
+  animation: flash 1.4s ease-in-out;
+}
+
+/* Animation Keyframes */
+@keyframes pulse {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes shake {
+  0% { transform: translate(0px, 0px); }
+  25% { transform: translate(5px, -5px); }
+  50% { transform: translate(-5px, 5px); }
+  75% { transform: translate(5px, 5px); }
+  100% { transform: translate(0px, 0px); }
+}
+
+@keyframes flash {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes poisonPulse {
+  0% { filter: hue-rotate(0deg); opacity: 0.5; }
+  50% { filter: hue-rotate(90deg); opacity: 1; }
+  100% { filter: hue-rotate(0deg); opacity: 0.5; }
+}
+
+@keyframes fadeShield {
+  0% { opacity: 0; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+
+/* Card UI */
+.card {
+  display: inline-block;
+  margin: 6px;
+  text-align: center;
+  position: relative;
+  width: 100px;
+}
+
+.card-image {
+  width: 100px;
+  height: auto;
+  border-radius: 4px;
+}
+
+.card-name {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #fff;
+}
+
+/* Face-Down Trap Styling */
+.card.face-down {
+  filter: grayscale(100%);
+  opacity: 0.85;
+  border: 2px dashed #555;
+}
+
+/* Optional Type-based Borders */
+.card.attack { border: 2px solid red; }
+.card.defense { border: 2px solid blue; }
+.card.trap { border: 2px dashed purple; }
+
+/* Combo & Damage Glow Effects */
+.card.damage-glow {
+  animation: damagePulse 1s ease-in-out;
+  box-shadow: 0 0 15px red;
+}
+
+.card.combo-glow {
+  animation: comboPulse 1s ease-in-out;
+  box-shadow: 0 0 15px gold;
+}
+
+@keyframes damagePulse {
+  0% { box-shadow: 0 0 0 red; }
+  50% { box-shadow: 0 0 20px red; }
+  100% { box-shadow: 0 0 0 red; }
+}
+
+@keyframes comboPulse {
+  0% { box-shadow: 0 0 0 gold; }
+  50% { box-shadow: 0 0 20px gold; }
+  100% { box-shadow: 0 0 0 gold; }
 }
 /* Return to Hub Button */
 .return-to-hub {
