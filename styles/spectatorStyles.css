@@ -146,5 +146,27 @@ h1, h2 {
   background: rgba(255, 255, 0, 0.2);
   animation: pulse 0.6s ease-in-out;
 }
+/* Return to Hub Button */
+.return-to-hub {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(0, 128, 128, 0.9);
+  color: white;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 8px;
+  border: 2px solid white;
+  text-decoration: none;
+  cursor: pointer;
+  z-index: 1000;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
 
-/* Other animation types like heal, poison, fire, etc. */
+.return-to-hub:hover {
+  background-color: rgba(0, 200, 200, 1);
+  transform: scale(1.05);
+  box-shadow: 0 0 10px #00ffff;
+}
+
