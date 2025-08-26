@@ -2,6 +2,7 @@
 import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
+import { API_BASE, UI_BASE } from './config.js';
 
 // Check if the URL has the "spectator=true" parameter
 const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
@@ -9,9 +10,9 @@ const isSpectator = new URLSearchParams(window.location.search).get('spectator')
 // Fully renders the current state of the Duel UI
 export function renderDuelUI() {
   // Render hands and fields (disabled for spectators)
-  renderHand('player1', isSpectator);  // Pass isSpectator to disable interaction
+  renderHand('player1', isSpectator);
   renderHand('player2', isSpectator);
-  renderField('player1', isSpectator); // Pass isSpectator to disable interaction
+  renderField('player1', isSpectator);
   renderField('player2', isSpectator);
 
   // Update HP display
@@ -30,11 +31,10 @@ export function renderDuelUI() {
       : `Turn: ${duelState.currentPlayer}`;
   }
 
-  // Check for winner
+  // Winner: upload summary and redirect (if not spectator)
   if (duelState.winner) {
     alert(`${duelState.winner} wins the duel!`);
 
-    // Trigger duel summary upload and redirect (if not in spectator mode)
     if (!duelState.summarySaved && !isSpectator) {
       console.log("Saving summary and redirecting...");
 
@@ -42,60 +42,72 @@ export function renderDuelUI() {
       const summary = {
         duelId,
         winner: duelState.winner,
-        players: {
+        hp: {
+          player1: duelState.players.player1.hp,
+          player2: duelState.players.player2.hp
+        },
+        cards: {
           player1: {
-            name: duelState.players.player1.discordId || "Player 1",
-            hp: duelState.players.player1.hp,
-            field: duelState.players.player1.field,
-            cardsPlayed:
-              duelState.players.player1.deck.length +
-              duelState.players.player1.discardPile.length,
+            field: duelState.players.player1.field.length,
+            hand: duelState.players.player1.hand.length,
+            deck: duelState.players.player1.deck.length,
+            discard: duelState.players.player1.discardPile.length
           },
           player2: {
-            name: duelState.players.player2.discordId || "Player 2",
-            hp: duelState.players.player2.hp,
-            field: duelState.players.player2.field,
-            cardsPlayed:
-              duelState.players.player2.deck.length +
-              duelState.players.player2.discardPile.length,
-          },
-        },
+            field: duelState.players.player2.field.length,
+            hand: duelState.players.player2.hand.length,
+            deck: duelState.players.player2.deck.length,
+            discard: duelState.players.player2.discardPile.length
+          }
+        }
       };
 
       duelState.summarySaved = true;
 
-      fetch('https://duel-bot-backend-production.up.railway.app/summary/save', {
+      fetch(`${API_BASE}/summary/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(summary),
+        body: JSON.stringify(summary)
       })
         .then(() => {
-          window.location.href = `https://duel-summary-ui-production.up.railway.app/summary.html?duelId=${duelId}`;
+          // If you have a dedicated summary UI, set ?ui=<summary host> in the URL
+          window.location.href = `${UI_BASE}/summary.html?duelId=${duelId}`;
         })
-        .catch(err => {
-          console.error('Summary save failed:', err);
-        });
+        .catch(err => console.error('Summary save failed:', err));
     }
 
     return; // Stop re-render loop
   }
 
-  // If it's the bot's turn and not a spectator, trigger backend move
-  if (duelState.currentPlayer === 'bot' && !isSpectator) {
+  // If it's the bot's turn (player2) and not a spectator, trigger backend move
+  if (duelState.currentPlayer === 'player2' && !isSpectator) {
     console.log("Bot's turn triggered — sending to backend...");
 
-    fetch('https://duel-bot-backend-production.up.railway.app/bot/turn', {
+    // Map UI state (player2) -> backend expectation (bot)
+    const payload = JSON.parse(JSON.stringify(duelState));
+    if (payload.players?.player2 && !payload.players.bot) {
+      payload.players.bot = payload.players.player2;
+      delete payload.players.player2;
+    }
+    if (payload.currentPlayer === 'player2') payload.currentPlayer = 'bot';
+
+    fetch(`${API_BASE}/duel/turn`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(duelState),
+      body: JSON.stringify(payload)
     })
       .then(res => res.json())
       .then(updatedState => {
+        // Map backend response (bot) -> UI state (player2)
+        if (updatedState?.players?.bot && !updatedState.players.player2) {
+          updatedState.players.player2 = updatedState.players.bot;
+          delete updatedState.players.bot;
+        }
+        if (updatedState?.currentPlayer === 'bot') updatedState.currentPlayer = 'player2';
+
         Object.assign(duelState, updatedState);
-        renderDuelUI(); // Re-render after bot move
+        renderDuelUI();
       })
-      .catch(err => {
-        console.error("Bot move failed:", err);
-      });
+      .catch(err => console.error("Bot move failed:", err));
   }
 }
