@@ -26,7 +26,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(ROOT, { extensions: ["html"] }));
-
 app.get("*", (_req, res) => res.sendFile(INDEX));
 
 app.listen(PORT, () => {
