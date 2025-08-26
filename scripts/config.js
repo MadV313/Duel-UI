@@ -2,12 +2,12 @@
 const qs = new URLSearchParams(location.search);
 
 export const API_BASE =
-  qs.get('api') ||                  // URL param override (best for prod buttons)
-  window.DUEL_BACKEND_URL ||        // optional global injected by host
-  localStorage.getItem('DUEL_API') ||
-  (location.hostname === 'localhost'
-    ? 'http://localhost:8080'
-    : 'https://duel-bot-backend-production.up.railway.app'); // safe prod default
+  qs.get("api") ||                         // preferred: passed by the /practice button
+  window.DUEL_BACKEND_URL ||               // optional global if you ever inject it
+  localStorage.getItem("DUEL_API") ||      // optional manual override for dev
+  (location.hostname === "localhost"       // fallback
+    ? "http://localhost:8080"
+    : location.origin);
 
 export const UI_BASE =
   qs.get('ui') ||
