@@ -1,4 +1,3 @@
-// scripts/duelLoader.js
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
 import { API_BASE } from './config.js';
@@ -17,7 +16,6 @@ if (player1Id && player2Id) {
     .then(data => {
       if (data.error) throw new Error(data.error);
 
-      // Normalize bot → player2 for the UI
       if (data?.players?.bot && !data.players.player2) {
         data.players.player2 = data.players.bot;
         delete data.players.bot;
