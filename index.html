@@ -100,7 +100,7 @@
           startBtn.disabled = true;
           startBtn.textContent = "Initializing...";
           await loadPracticeDuel();
-          await flipCoin();
+          await flipCoin(duelState.currentPlayer); // animate based on backend-chosen starter
           startBtn.textContent = "✅ Practice Ready";
         });
       }
