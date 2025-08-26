@@ -1,19 +1,14 @@
 // scripts/duelLoader.js
-
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
+import { API_BASE } from './config.js';
 
-// ✅ Helper to extract query string parameters
-function getQueryParam(key) {
-  const params = new URLSearchParams(window.location.search);
-  return params.get(key);
-}
-
-const player1Id = getQueryParam('player1');
-const player2Id = getQueryParam('player2') || 'bot'; // Default to bot for practice mode
+const qs = new URLSearchParams(location.search);
+const player1Id = qs.get('player1');
+const player2Id = qs.get('player2') || 'bot';
 
 if (player1Id && player2Id) {
-  fetch('https://duel-bot-backend-production.up.railway.app/duel/start', {
+  fetch(`${API_BASE}/duel/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ player1Id, player2Id })
@@ -22,14 +17,18 @@ if (player1Id && player2Id) {
     .then(data => {
       if (data.error) throw new Error(data.error);
 
-      // ✅ Inject server response into shared frontend state
-      Object.assign(duelState, data);
+      // Normalize bot → player2 for the UI
+      if (data?.players?.bot && !data.players.player2) {
+        data.players.player2 = data.players.bot;
+        delete data.players.bot;
+      }
+      if (data?.currentPlayer === 'bot') data.currentPlayer = 'player2';
 
-      // ✅ Initialize visual duel field
+      Object.assign(duelState, data);
       renderDuelUI();
     })
     .catch(err => {
       console.error('❌ Duel load failed:', err);
-      alert('Failed to load duel. Make sure both players have saved and linked decks.');
+      alert('Failed to load duel. Make sure both players saved/linked decks.');
     });
 }
