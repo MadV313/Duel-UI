@@ -65,6 +65,7 @@
   <!-- Inline Script Bindings -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
+    import { duelState } from './scripts/duelState.js';
     import { flipCoin } from './scripts/coinFlip.js';
     import { renderDuelUI } from './scripts/renderDuelUI.js';
     import { renderSpectatorView } from './scripts/spectatorView.js';
@@ -100,7 +101,7 @@
           startBtn.disabled = true;
           startBtn.textContent = "Initializing...";
           await loadPracticeDuel();
-          await flipCoin(duelState.currentPlayer); // animate based on backend-chosen starter
+          await flipCoin(duelState.currentPlayer); // 👈 animate to match backend
           startBtn.textContent = "✅ Practice Ready";
         });
       }
