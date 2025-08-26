@@ -6,6 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.use((req, _res, next) => {
+  console.log(`➡️  ${req.method} ${req.url}`);
+  next();
+});
 const PORT = process.env.PORT || 5173;
 
 // Light caching for static assets
