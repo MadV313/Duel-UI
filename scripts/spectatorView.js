@@ -1,53 +1,104 @@
-// spectatorView.js — Renders the Duel UI in read-only mode for spectators
+// scripts/spectatorView.js — Renders the Duel UI in read-only mode for spectators
 
 import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
+import allCards from './allCards.js';
 
-// Renders the Duel UI for spectators (read-only)
+// quick lookup by "003" id
+const CARD_INDEX = Object.fromEntries(
+  allCards.map(c => [String(c.card_id).padStart(3, '0'), c])
+);
+
+function asIdString(v) {
+  return String(v).padStart(3, '0');
+}
+
+/**
+ * Render the Duel UI in read-only mode (no interactions)
+ */
 export function renderSpectatorView() {
-  // Render hands and fields for both players (read-only)
+  // Render hands/fields with spectator=true to disable clicks
   renderHand('player1', true);
   renderHand('player2', true);
   renderField('player1', true);
   renderField('player2', true);
 
   // Update HP display
-  const hp1 = document.getElementById('player1-hp');
-  const hp2 = document.getElementById('player2-hp');
-  if (hp1 && hp2) {
-    hp1.textContent = duelState.players.player1.hp;
-    hp2.textContent = duelState.players.player2.hp;
+  const p1 = duelState?.players?.player1 ?? { hp: 200 };
+  const p2 = duelState?.players?.player2 ?? { hp: 200 };
+  const hp1El = document.getElementById('player1-hp');
+  const hp2El = document.getElementById('player2-hp');
+  if (hp1El) hp1El.textContent = p1.hp ?? 0;
+  if (hp2El) hp2El.textContent = p2.hp ?? 0;
+
+  // Turn banner
+  const turnEl = document.getElementById('turn-display');
+  if (turnEl) {
+    turnEl.textContent = duelState?.winner
+      ? `Winner: ${duelState.winner}`
+      : `Current Turn: ${duelState?.currentPlayer ?? 'player1'}`;
   }
 
-  // Show current turn
-  const turnDisplay = document.getElementById('turn-display');
-  if (turnDisplay) {
-    turnDisplay.textContent = `Current Turn: ${duelState.currentPlayer}`;
+  // Winner (optional element)
+  if (duelState?.winner) {
+    const w = document.getElementById('winner-message');
+    if (w) w.textContent = `${duelState.winner} wins the duel!`;
   }
 
-  // Show winner (if any)
-  if (duelState.winner) {
-    const winnerMessage = document.getElementById('winner-message');
-    if (winnerMessage) {
-      winnerMessage.textContent = `${duelState.winner} wins the duel!`;
-    }
-  }
-
-  // Optional animations for active card effects
-  renderAnimations();
+  // Light-weight visual cues based on cards on the field
+  renderSpectatorAnimations();
 }
 
-// Helper function to render active visual effects
-function renderAnimations() {
-  document.body.classList.remove('animation-attack', 'animation-shield'); // Reset
+/**
+ * Adds simple CSS classes on <body> if certain card types/tags are present on the field.
+ * This avoids incorrect references to a non-existent `card.effect` property.
+ */
+function renderSpectatorAnimations() {
+  document.body.classList.remove('animation-attack', 'animation-shield');
 
-  const p1Field = duelState.players.player1.field;
-  const p2Field = duelState.players.player2.field;
+  const p1Field = duelState?.players?.player1?.field ?? [];
+  const p2Field = duelState?.players?.player2?.field ?? [];
 
-  const hasAttack = [...p1Field, ...p2Field].some(card => card.effect === 'attack');
-  const hasShield = [...p1Field, ...p2Field].some(card => card.effect === 'shield');
+  let hasAttackish = false;
+  let hasShieldish = false;
 
-  if (hasAttack) document.body.classList.add('animation-attack');
-  if (hasShield) document.body.classList.add('animation-shield');
+  const scan = (arr) => {
+    for (const entry of arr) {
+      const id = asIdString(entry?.cardId ?? entry?.card_id ?? entry);
+      const meta = CARD_INDEX[id];
+      if (!meta) continue;
+
+      const type = (meta.type || '').toLowerCase();
+      const tags = Array.isArray(meta.tags)
+        ? meta.tags.map(t => String(t).toLowerCase())
+        : String(meta.tags || '').toLowerCase();
+
+      // Heuristics for visuals
+      if (type === 'attack' ||
+          includesTag(tags, ['gun', 'melee', 'explosive', 'fire'])) {
+        hasAttackish = true;
+      }
+      if (type === 'defense' ||
+          includesTag(tags, ['block', 'armor', 'shield', 'damage_reduction', 'critical_immunity'])) {
+        hasShieldish = true;
+      }
+
+      if (hasAttackish && hasShieldish) break;
+    }
+  };
+
+  scan(p1Field);
+  scan(p2Field);
+
+  if (hasAttackish) document.body.classList.add('animation-attack');
+  if (hasShieldish) document.body.classList.add('animation-shield');
+}
+
+function includesTag(tags, needles) {
+  if (Array.isArray(tags)) {
+    return tags.some(t => needles.includes(String(t).toLowerCase()));
+  }
+  // tags might be a comma-separated string from JSON
+  return needles.some(n => String(tags).includes(n));
 }
