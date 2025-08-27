@@ -1,14 +1,24 @@
-// duel.js — draw, discard, turn logic (UI-only)
+// scripts/duel.js — draw, discard, turn logic (UI ↔ backend)
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 import allCards from './allCards.js';
+import { apiUrl } from './config.js';
 
 // Helper: find card metadata by numeric id or "003" string
 function findCardMeta(id) {
-  const idStr = typeof id === 'number' ? String(id).padStart(3, '0') : String(id).padStart(3, '0');
+  const idStr = String(id).padStart(3, '0');
   return allCards.find(c => c.card_id === idStr);
+}
+
+// Small helpers to avoid double-click spam while we hit the API
+function setControlsDisabled(disabled) {
+  const buttons = [
+    document.getElementById('startPracticeBtn'),
+    ...document.querySelectorAll('#controls button')
+  ].filter(Boolean);
+  buttons.forEach(b => (b.disabled = !!disabled));
 }
 
 export function drawCard() {
@@ -48,11 +58,48 @@ export function discardCard(cardIndex) {
   renderDuelUI();
 }
 
-export function endTurn() {
-  // Apply start-of-next-turn buffs to the opponent (after swap)
-  duelState.currentPlayer = duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
+/**
+ * End your turn ➜ send state to backend so the bot can act.
+ * The backend returns the updated duelState (after bot move, coin flips, etc).
+ */
+export async function endTurn() {
+  try {
+    setControlsDisabled(true);
 
-  applyStartTurnBuffs();
-  triggerAnimation('turn');
-  renderDuelUI();
+    // Locally move to opponent so your UI shows it's their turn
+    // (server will return authoritative state next)
+    duelState.currentPlayer =
+      duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
+
+    applyStartTurnBuffs();
+    triggerAnimation('combo');
+    renderDuelUI();
+
+    // POST to backend for bot move
+    const res = await fetch(apiUrl('/duel/turn'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Send *just enough* info. If your backend expects a different shape,
+      // adjust here (e.g., { state: duelState } or full duelState directly).
+      body: JSON.stringify({ state: duelState })
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Bot turn failed ${res.status}: ${txt.slice(0, 200)}`);
+    }
+
+    const serverState = await res.json().catch(() => null);
+    if (serverState && typeof serverState === 'object') {
+      // Shallow-merge server state into our live object to keep references intact
+      Object.assign(duelState, serverState);
+    }
+
+    renderDuelUI();
+  } catch (err) {
+    console.error('❌ /duel/turn error:', err);
+    alert('Bot move failed. Check console and backend logs.');
+  } finally {
+    setControlsDisabled(false);
+  }
 }
