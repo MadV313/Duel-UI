@@ -1,4 +1,5 @@
 // server.mjs — Duel-UI
+import fs from 'fs'; // 👈 NEW: ESM fs import
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,7 +26,7 @@ console.log('BOOT env UI:', {
   NODE_ENV: process.env.NODE_ENV,
   PORT: String(PORT),
   PWD: process.cwd(),
-  FILES: (() => { try { return require('fs').readdirSync('.'); } catch { return []; } })(),
+  FILES: (() => { try { return fs.readdirSync('.'); } catch { return []; } })(), // 👈 replaced the require(...) version
   PUBLIC_API,
   INTERNAL_API,
   ON_RAILWAY
