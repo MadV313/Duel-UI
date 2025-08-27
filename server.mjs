@@ -3,6 +3,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import mime from "mime-types";
 import fs from "fs";
+console.log('BOOT env UI:', {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT,
+  PWD: process.cwd(),
+  FILES: fs.readdirSync('.'),
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
