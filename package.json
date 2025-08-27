@@ -2,7 +2,10 @@
   "name": "duel-ui",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node server.mjs" },
+  "scripts": {
+    "build": "echo \"(no build step)\"",
+    "start": "node server.mjs"
+  },
   "dependencies": {
     "express": "^4.19.2",
     "mime-types": "^2.1.35"
