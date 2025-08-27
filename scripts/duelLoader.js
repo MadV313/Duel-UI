@@ -1,32 +1,110 @@
+// scripts/duelLoader.js
+// Auto-start loader for duels launched from Discord links (PvP or Practice)
+
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
-import { API_BASE } from './config.js';
+import { apiUrl } from './config.js';
 
 const qs = new URLSearchParams(location.search);
-const player1Id = qs.get('player1');
-const player2Id = qs.get('player2') || 'bot';
+const mode       = qs.get('mode');          // e.g. "practice"
+const player1Id  = qs.get('player1');
+const player2Id  = qs.get('player2') || 'bot';
 
-if (player1Id && player2Id) {
-  fetch(`${API_BASE}/duel/start`, {
+// Normalize server payload into the shape our UI expects
+function normalizeServerState(data) {
+  if (!data || typeof data !== 'object') return null;
+
+  // Some backends use "bot" as a key — map it to player2 for UI simplicity
+  if (data?.players?.bot && !data.players.player2) {
+    data.players.player2 = data.players.bot;
+    delete data.players.bot;
+  }
+  if (data?.currentPlayer === 'bot') data.currentPlayer = 'player2';
+
+  // Make sure required containers exist
+  data.players.player1.hand       ??= [];
+  data.players.player1.field      ??= [];
+  data.players.player1.discardPile??= [];
+  data.players.player2.hand       ??= [];
+  data.players.player2.field      ??= [];
+  data.players.player2.discardPile??= [];
+
+  // If practice and server didn't label player1, show something friendly
+  if (mode === 'practice') {
+    data.players.player1.discordName ||= 'You';
+    data.players.player2.discordName ||= data.players.player2.name || 'Practice Bot';
+  }
+
+  return data;
+}
+
+async function loadPractice() {
+  // Try to read existing state first (Discord command already initialized it)
+  let res = await fetch(apiUrl('/duel/state')).catch(() => null);
+
+  // If the state isn't available, you can optionally try to initialize here
+  if (!res || !res.ok) {
+    // Optional: start a new practice duel from the UI if none exists
+    // Comment these two lines out if you want to force init only from Discord:
+/*
+    await fetch(apiUrl('/duel/practice')).catch(() => null);
+    res = await fetch(apiUrl('/duel/state')).catch(() => null);
+*/
+  }
+
+  if (!res || !res.ok) {
+    console.error('❌ Practice load failed:', res && (await res.text()).slice(0, 200));
+    return;
+  }
+
+  const data = normalizeServerState(await res.json().catch(() => null));
+  if (!data) {
+    console.error('❌ Invalid duel state payload');
+    return;
+  }
+
+  Object.assign(duelState, data);
+  renderDuelUI();
+}
+
+async function loadPvp(p1, p2) {
+  const res = await fetch(apiUrl('/duel/start'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ player1Id, player2Id })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.error) throw new Error(data.error);
+    body: JSON.stringify({ player1Id: p1, player2Id: p2 })
+  }).catch(() => null);
 
-      if (data?.players?.bot && !data.players.player2) {
-        data.players.player2 = data.players.bot;
-        delete data.players.bot;
-      }
-      if (data?.currentPlayer === 'bot') data.currentPlayer = 'player2';
+  if (!res || !res.ok) {
+    const msg = res ? await res.text().catch(() => '') : 'no response';
+    console.error('❌ Duel load failed:', msg);
+    alert('Failed to load duel. Make sure both players saved/linked decks.');
+    return;
+  }
 
-      Object.assign(duelState, data);
-      renderDuelUI();
-    })
-    .catch(err => {
-      console.error('❌ Duel load failed:', err);
-      alert('Failed to load duel. Make sure both players saved/linked decks.');
-    });
+  const data = normalizeServerState(await res.json().catch(() => null));
+  if (!data) {
+    console.error('❌ Invalid duel state payload');
+    return;
+  }
+
+  Object.assign(duelState, data);
+  renderDuelUI();
 }
+
+// Auto-run based on query params
+(async function main() {
+  try {
+    if (player1Id && player2Id) {
+      // PvP flow from Discord invite link: /?player1=...&player2=...
+      await loadPvp(player1Id, player2Id);
+    } else if (mode === 'practice') {
+      // Practice flow from /practice button: Discord already called /bot/practice
+      await loadPractice();
+    } else {
+      // No-op: page can still be used in "mock" mode via other scripts/controls
+      console.log('[duelLoader] No PvP/practice params present; loader idle.');
+    }
+  } catch (e) {
+    console.error('❌ duelLoader fatal error:', e);
+  }
+})();
