@@ -8,6 +8,10 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "http-proxy-middleware": "^2.0.6",
     "mime-types": "^2.1.35"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
