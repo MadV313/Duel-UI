@@ -1,14 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>DayZ CCG Duel Field</title>
-  <link rel="stylesheet" href="styles/style.css">
+  <link rel="stylesheet" href="styles/style.css" />
+
+  <!-- ✅ Make API_BASE available to every script (before modules) -->
+  <script>
+    // Prefer the UI proxy (/api). Allow ?api=... override for local/dev.
+    window.API_BASE = new URLSearchParams(location.search).get('api') || '/api';
+    console.log('[UI] API_BASE =', window.API_BASE);
+  </script>
 
   <!-- Duel Loader (for Discord-initiated PvP matches) -->
   <script type="module" src="scripts/duelLoader.js" defer></script>
 
-  <!-- Script Modules -->
+  <!-- Script Modules (these now see window.API_BASE) -->
   <script type="module" src="/scripts/api-base.js"></script>
   <script type="module" src="/scripts/fetch-shim.js"></script>
   <script type="module" src="scripts/config.js" defer></script>
@@ -24,7 +31,7 @@
   <script type="module" src="scripts/spectatorView.js" defer></script>
 
   <!-- Spectator Styles -->
-  <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles">
+  <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles" />
 </head>
 
 <body>
@@ -72,10 +79,11 @@
     import { renderDuelUI } from './scripts/renderDuelUI.js';
     import { renderSpectatorView } from './scripts/spectatorView.js';
 
+    // Expose bits used by inline onclicks / other scripts
     window.flipCoin = flipCoin;
     window.loadPracticeDuel = loadPracticeDuel;
 
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener('DOMContentLoaded', () => {
       const urlParams = new URLSearchParams(window.location.search);
       const isSpectator = urlParams.get('spectator') === 'true';
       const isMock = urlParams.get('mock') === 'true';
@@ -89,24 +97,27 @@
       }
 
       if (isMock) {
-        document.getElementById("controls").style.display = "flex";
-        document.getElementById("player1-hand").style.display = "flex";
-        document.getElementById("player2-hand").style.display = "flex";
-        document.getElementById("player1-field").style.display = "flex";
-        document.getElementById("player2-field").style.display = "flex";
+        document.getElementById('controls').style.display = 'flex';
+        document.getElementById('player1-hand').style.display = 'flex';
+        document.getElementById('player2-hand').style.display = 'flex';
+        document.getElementById('player1-field').style.display = 'flex';
+        document.getElementById('player2-field').style.display = 'flex';
       }
 
-      const startBtn = document.getElementById("startPracticeBtn");
+      const startBtn = document.getElementById('startPracticeBtn');
       if (startBtn) {
-        startBtn.addEventListener("click", async () => {
-          console.log("🎮 Starting practice duel...");
+        startBtn.addEventListener('click', async () => {
+          console.log('🎮 Starting practice duel...');
           startBtn.disabled = true;
-          startBtn.textContent = "Initializing...";
-          await loadPracticeDuel();
-          await flipCoin(duelState.currentPlayer); // 👈 animate to match backend
-          startBtn.textContent = "✅ Practice Ready";
+          startBtn.textContent = 'Initializing...';
+          await loadPracticeDuel();                    // should call /api/duel/start (through proxy)
+          await flipCoin(duelState.currentPlayer);     // animate to match backend winner
+          startBtn.textContent = '✅ Practice Ready';
         });
       }
+
+      // Tiny sanity log so we can see API base at runtime
+      console.log('[UI] Using API via', window.API_BASE);
     });
   </script>
 </body>
