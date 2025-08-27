@@ -1,4 +1,11 @@
-import express from "express";
+import express from 'express';
+const app = express();
+const PORT = process.env.PORT || 5173;
+
+app.get('/health', (_req, res) => res.type('text/plain').send('ok'));
+app.get('/', (_req, res) => res.send('ui-root-ok'));
+
+app.listen(PORT, '0.0.0.0', () => console.log('UI listening', PORT));
 import path from "path";
 import { fileURLToPath } from "url";
 import mime from "mime-types";
