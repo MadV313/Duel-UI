@@ -1,57 +1,67 @@
 // server.mjs — Duel-UI
-import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-import mime from "mime-types";
-import fs from "fs";
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// Boot banner so you can see exactly what is running
-console.log("BOOT env UI:", {
+const app  = express();
+const PORT = process.env.PORT || 8080;
+
+// Public backend (used locally or as fallback)
+const PUBLIC_API = (process.env.DUEL_BACKEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+// If we’re on Railway, prefer the private hostname for server→server calls
+const ON_RAILWAY =
+  !!process.env.RAILWAY_ENVIRONMENT ||
+  !!process.env.RAILWAY_STATIC_URL ||
+  !!process.env.RAILWAY_PROJECT_ID;
+
+const INTERNAL_API = ON_RAILWAY ? 'http://duel-bot.railway.internal:8080' : PUBLIC_API;
+
+console.log('BOOT env UI:', {
   NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
+  PORT: String(PORT),
   PWD: process.cwd(),
-  FILES: (() => { try { return fs.readdirSync("."); } catch { return []; } })(),
+  FILES: (() => { try { return require('fs').readdirSync('.'); } catch { return []; } })(),
+  PUBLIC_API,
+  INTERNAL_API,
+  ON_RAILWAY
 });
 
-const app  = express();                 // <-- only defined once
-const PORT = process.env.PORT || 5173;
+// Health
+app.get('/health', (_req, res) => res.type('text/plain').send('ok'));
 
-// Prefer a build folder if present; otherwise serve repo root
-const DIST  = path.join(__dirname, "dist");
-const ROOT  = fs.existsSync(DIST) ? DIST : __dirname;
-const INDEX = path.join(ROOT, "index.html");
+// Static files (index.html at repo root)
+app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
 
-// Minimal request log (helps when debugging 502s)
-app.use((req, _res, next) => { console.log(`➡️  ${req.method} ${req.url}`); next(); });
+// API proxy: the browser hits /api/* → we forward to backend (private when possible)
+app.use(
+  '/api',
+  createProxyMiddleware({
+    target: INTERNAL_API,
+    changeOrigin: true,
+    xfwd: true,
+    pathRewrite: { '^/api': '' },
+    onProxyReq: (proxyReq, req) => {
+      console.log('[ui→api] proxy', {
+        method: req.method,
+        url: req.url,
+        target: INTERNAL_API
+      });
+    },
+    onError: (err, _req, res) => {
+      console.error('[ui→api] proxy error:', err?.message || err);
+      res.status(502).json({ error: 'Bad gateway (UI→API proxy failed)' });
+    }
+  })
+);
 
-// Healthcheck Railway can hit
-app.get("/health", (_req, res) => res.type("text/plain").send("ok"));
+// Single-page fallback
+app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// Content-type + light caching for static assets
-app.use((req, res, next) => {
-  const type = mime.lookup(req.path);
-  if (type) res.type(type);
-  if (/\.(png|jpe?g|gif|webp|svg|css|js|woff2?)$/i.test(req.path)) {
-    res.setHeader("Cache-Control", "public, max-age=600");
-  }
-  next();
-});
-
-// Serve static files
-app.use(express.static(ROOT, { extensions: ["html"] }));
-
-// SPA fallback to index.html
-app.get("*", (_req, res) => {
-  if (!fs.existsSync(INDEX)) {
-    return res.status(500).type("text/plain").send(`index.html not found in ${ROOT}`);
-  }
-  res.sendFile(INDEX);
-});
-
-// Bind to the exact PORT on all interfaces
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Duel-UI listening on ${PORT}, serving ${ROOT}, index=${INDEX}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Duel-UI listening on ${PORT}, index=${path.join(__dirname, 'index.html')}`);
 });
