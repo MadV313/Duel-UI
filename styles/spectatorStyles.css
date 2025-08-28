@@ -382,3 +382,30 @@ h1, h2 {
   0% { transform: rotateY(0deg); }
   100% { transform: rotateY(360deg); }
 }
+
+/* --- Return-to-Hub: harden styles + placement (override) --- */
+a.return-to-hub,
+a.return-to-hub:link,
+a.return-to-hub:visited {
+  position: fixed !important;
+  bottom: max(20px, env(safe-area-inset-bottom)) !important;
+  right:  max(20px, env(safe-area-inset-right))  !important;
+  display: inline-block !important;
+  background-color: rgba(0, 128, 128, 0.9) !important;
+  color: #fff !important;
+  padding: 12px 20px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  border-radius: 8px !important;
+  border: 2px solid #fff !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  z-index: 10000 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.15) !important;
+}
+
+a.return-to-hub:hover {
+  background-color: rgba(0, 200, 200, 1) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 0 10px #00ffff !important;
+}
