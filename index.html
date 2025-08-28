@@ -47,7 +47,8 @@
     <div>Challenger HP: <span id="player1-hp">200</span></div>
     <div>Opponent HP: <span id="player2-hp">200</span></div>
   </div>
-  <div id="turn-display"></div>
+  <!-- 👇 hidden until coin flip completes -->
+  <div id="turn-display" class="hidden"></div>
 
   <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
@@ -74,35 +75,65 @@
   <!-- Inline Script Bindings -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
+    import { duelState } from './scripts/duelState.js';
+    import { flipCoin } from './scripts/coinFlip.js';
+    import { renderDuelUI } from './scripts/renderDuelUI.js';
     import { renderSpectatorView } from './scripts/spectatorView.js';
     import { drawCard, endTurn } from './scripts/duel.js';
 
     // Expose bits used by inline onclicks / other scripts
+    window.flipCoin         = flipCoin;
     window.loadPracticeDuel = loadPracticeDuel;
     window.drawCard         = drawCard;
     window.endTurn          = endTurn;
 
-    document.addEventListener('DOMContentLoaded', () => {
-      // Start hidden (only Start button visible) — CSS gating uses .duel-ready
-      document.body.classList.remove('duel-ready');
+    function showAfterFlip() {
+      const hands  = ['player1-hand','player2-hand'];
+      const fields = ['player1-field','player2-field'];
+      hands.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'flex'; });
+      fields.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'grid'; });
+      const draw = document.getElementById('drawBtn');
+      const endT = document.getElementById('endTurnBtn');
+      if (draw) draw.style.display = 'inline-block';
+      if (endT) endT.style.display = 'inline-block';
+    }
 
+    function hideUntilFlip() {
+      const hands  = ['player1-hand','player2-hand'];
+      const fields = ['player1-field','player2-field'];
+      hands.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      fields.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      const draw = document.getElementById('drawBtn');
+      const endT = document.getElementById('endTurnBtn');
+      if (draw) draw.style.display = 'none';
+      if (endT) endT.style.display = 'none';
+      // keep the banner hidden until flip
+      const turn = document.getElementById('turn-display');
+      if (turn) turn.classList.add('hidden');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
       const urlParams   = new URLSearchParams(window.location.search);
       const isSpectator = urlParams.get('spectator') === 'true';
       const isMock      = urlParams.get('mock') === 'true';
 
       if (isSpectator) {
         renderSpectatorView();
-        const controls = document.getElementById('controls');
-        if (controls) controls.style.display = 'none';
+        document.getElementById('controls').style.display = 'none';
         document.getElementById('spectatorStyles').disabled = false;
       } else {
         document.getElementById('spectatorStyles').disabled = true;
       }
 
-      // In normal (non-mock) mode, we let CSS hide everything except Start.
-      // Mock mode shows everything immediately.
+      // Only the Start button should be visible before coin flip (unless mock mode)
+      if (!isSpectator && !isMock) hideUntilFlip();
+
       if (isMock) {
-        document.body.classList.add('duel-ready');
+        document.getElementById('controls').style.display = 'flex';
+        document.getElementById('player1-hand').style.display = 'flex';
+        document.getElementById('player2-hand').style.display = 'flex';
+        document.getElementById('player1-field').style.display = 'flex';
+        document.getElementById('player2-field').style.display = 'flex';
       }
 
       const startBtn = document.getElementById('startPracticeBtn');
@@ -113,20 +144,19 @@
             startBtn.disabled = true;
             startBtn.textContent = 'Initializing...';
 
-            // loadPracticeDuel handles:
-            // - hitting the backend
-            // - coin-flip animation
-            // - revealing the board (.duel-ready)
-            // - hiding the Start button (defensive re-hide below just in case)
-            const ok = await loadPracticeDuel();
+            // Init practice duel (does NOT reveal UI yet)
+            await loadPracticeDuel();
 
-            if (ok) {
-              startBtn.textContent = '✅ Practice Ready';
-              startBtn.style.display = 'none'; // ensure it disappears
-            } else {
-              startBtn.disabled = false;
-              startBtn.textContent = '🎮 Start Practice Duel';
-            }
+            // Flip coin (reveals the turn banner)
+            startBtn.textContent = 'Flipping coin...';
+            await flipCoin(duelState.currentPlayer);
+
+            // Reveal zones and render with fetched state
+            showAfterFlip();
+            renderDuelUI();
+
+            startBtn.textContent = '✅ Practice Ready';
+            startBtn.style.display = 'none'; // hide the button after start
           } catch (e) {
             console.error('❌ Start failed:', e);
             startBtn.disabled = false;
