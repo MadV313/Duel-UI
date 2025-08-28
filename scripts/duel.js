@@ -1,4 +1,4 @@
-// scripts/duel.js — draw, discard, turn logic (UI-only; backend turn is triggered from renderDuelUI)
+// scripts/duel.js — draw, discard, turn logic (UI-only)
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
@@ -11,7 +11,15 @@ function findCardMeta(id) {
   return allCards.find(c => c.card_id === idStr);
 }
 
-// Draw one card for the current player
+// Keep buttons from being spammed during operations
+function setControlsDisabled(disabled) {
+  const buttons = [
+    document.getElementById('startPracticeBtn'),
+    ...document.querySelectorAll('#controls button')
+  ].filter(Boolean);
+  buttons.forEach(b => (b.disabled = !!disabled));
+}
+
 export function drawCard() {
   const playerKey = duelState.currentPlayer; // 'player1' | 'player2'
   const player = duelState.players[playerKey];
@@ -29,11 +37,9 @@ export function drawCard() {
   const next = player.deck.shift(); // { cardId, isFaceDown? }
   player.hand.push(next);
 
-  // Visual: backpack bonuses etc. happen in applyStartTurnBuffs()
   renderDuelUI();
 }
 
-// Discard a card by index from the current player's hand
 export function discardCard(cardIndex) {
   const playerKey = duelState.currentPlayer;
   const player = duelState.players[playerKey];
@@ -52,24 +58,25 @@ export function discardCard(cardIndex) {
 
 /**
  * End your turn.
- * We only flip the turn locally and re-render.
- * renderDuelUI() will detect "player2" (bot) and call the backend /duel/turn,
- * handling the bot<->player2 mapping for us.
+ * We simply swap to the opponent, apply start-of-turn effects, and render.
+ * renderDuelUI() will call the backend for the bot when it's player2's turn.
  */
-export function endTurn() {
-  // Swap player
-  duelState.currentPlayer = (duelState.currentPlayer === 'player1') ? 'player2' : 'player1';
+export async function endTurn() {
+  try {
+    setControlsDisabled(true);
 
-  // Start-of-turn effects for whoever just became active
-  applyStartTurnBuffs();
+    // Swap turn locally
+    duelState.currentPlayer =
+      duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
 
-  // Nice visual pulse
-  triggerAnimation('combo');
-
-  // Re-render; if it's the bot's turn, renderDuelUI() will POST to the backend
-  renderDuelUI();
+    applyStartTurnBuffs();
+    triggerAnimation('turn');
+    renderDuelUI();
+  } finally {
+    setControlsDisabled(false);
+  }
 }
 
-// Expose for inline onclicks in index.html
+// (Optional) also expose for any inline onclick fallbacks
 window.drawCard = drawCard;
 window.endTurn  = endTurn;
