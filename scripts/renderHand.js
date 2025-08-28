@@ -1,9 +1,79 @@
-// scripts/renderHand.js — renders a player's hand
+// scripts/renderHand.js — renders a player's hand (with Play/Discard picker)
 import { renderCard } from './renderCard.js';
 import { duelState } from './duelState.js';
+import { playCard, discardCard } from './duel.js';
 
 function asIdString(cardId) {
   return String(cardId).padStart(3, '0');
+}
+
+/* ---------- lightweight action menu (singleton) ---------- */
+function getActionMenu() {
+  let menu = document.getElementById('card-action-menu');
+  if (menu) return menu;
+
+  menu = document.createElement('div');
+  menu.id = 'card-action-menu';
+  menu.className = 'card-action-menu hidden';
+  menu.innerHTML = `
+    <button data-action="play">Play</button>
+    <button data-action="discard">Discard</button>
+  `;
+  document.body.appendChild(menu);
+
+  // close on outside click
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden')) {
+      if (!menu.contains(e.target) && !e.target.closest('.card')) {
+        hideActionMenu();
+      }
+    }
+  });
+
+  // close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideActionMenu();
+  });
+
+  return menu;
+}
+
+function hideActionMenu() {
+  const menu = document.getElementById('card-action-menu');
+  if (menu) {
+    menu.classList.add('hidden');
+    menu.style.left = menu.style.top = '';
+  }
+  // remove any previous selected highlight
+  document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
+}
+
+function showActionMenuFor(el, player, index) {
+  const menu = getActionMenu();
+  // position menu above the card, centered
+  const rect = el.getBoundingClientRect();
+  const top = window.scrollY + rect.top - 8; // a bit above the card
+  const left = window.scrollX + rect.left + rect.width / 2;
+
+  menu.style.top = `${top}px`;
+  menu.style.left = `${left}px`;
+  menu.classList.remove('hidden');
+
+  // mark selected
+  document.querySelectorAll('.card.selected').forEach(n => n.classList.remove('selected'));
+  el.classList.add('selected');
+
+  // wire actions (rebind each time to use fresh indices)
+  menu.querySelector('[data-action="play"]').onclick = () => {
+    hideActionMenu();
+    if (player !== 'player1') return; // safety: only local player hand plays from UI
+    playCard(index);
+  };
+  menu.querySelector('[data-action="discard"]').onclick = () => {
+    hideActionMenu();
+    if (player !== 'player1') return;
+    discardCard(index);
+  };
 }
 
 /**
@@ -55,24 +125,17 @@ export function renderHand(player, isSpectator = false) {
     el.dataset.cardId = cardIdStr;
     el.dataset.faceDown = String(isFaceDown);
 
-    // Interactions: only on your own (visible) hand in player view
-    if (!isSpectator && !hideHand) {
+    // Hover highlight
+    el.addEventListener('mouseenter', () => el.classList.add('hovering'));
+    el.addEventListener('mouseleave', () => el.classList.remove('hovering'));
+
+    // Interactions: only on YOUR (visible) hand in player view
+    if (!isSpectator && !hideHand && player === 'player1') {
       el.classList.add('clickable');
-      el.title = 'Click to discard this card';
-      el.addEventListener('click', () => {
-        const ok = confirm(`Discard this card from ${player}'s hand?`);
-        if (!ok) return;
-
-        try {
-          if (index >= 0 && index < (duelState.players?.[player]?.hand?.length ?? 0)) {
-            duelState.players[player].hand.splice(index, 1);
-          }
-        } catch (e) {
-          console.warn('⚠️ Failed to discard card:', e);
-        }
-
-        // Re-render this hand only
-        renderHand(player, isSpectator);
+      el.title = 'Click to play or discard this card';
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        showActionMenuFor(el, player, index);
       });
     } else {
       el.classList.add('spectator');
