@@ -1,20 +1,17 @@
-# Duel-UI (static server)
+# Duel-UI (Node static + proxy server)
 FROM node:22-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Minimal deps to serve the UI
-COPY package*.json ./
-RUN npm ci --omit=dev || npm i --omit=dev
+# Install only production deps
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev --no-audit --no-fund || npm i --omit=dev --no-audit --no-fund
 
-# Copy site files
+# Copy the rest of the app
 COPY . .
 
-# Optional: if you later add a build step, do it here:
-# RUN npm run build
-
-# Let Railway map $PORT; server.mjs uses it
-EXPOSE 5173
+# Railway will set $PORT; server.mjs listens on it (defaults to 8080)
+EXPOSE 8080
 
 CMD ["node", "server.mjs"]
