@@ -56,8 +56,8 @@
   <!-- Controls -->
   <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
     <button id="startPracticeBtn">🎮 Start Practice Duel</button>
-    <button onclick="drawCard()">Draw</button>
-    <button onclick="endTurn()">End Turn</button>
+    <button id="drawBtn" onclick="drawCard()">Draw</button>
+    <button id="endTurnBtn" onclick="endTurn()">End Turn</button>
     <!-- <button onclick="flipCoin()">Flip Coin</button> -->
   </div>
 
@@ -81,10 +81,34 @@
     import { drawCard, endTurn } from './scripts/duel.js';
 
     // Expose bits used by inline onclicks / other scripts
-    window.flipCoin   = flipCoin;
+    window.flipCoin         = flipCoin;
     window.loadPracticeDuel = loadPracticeDuel;
-    window.drawCard   = drawCard;
-    window.endTurn    = endTurn;
+    window.drawCard         = drawCard;
+    window.endTurn          = endTurn;
+
+    function showAfterFlip() {
+      // Reveal all zones & buttons after flip
+      const hands  = ['player1-hand','player2-hand'];
+      const fields = ['player1-field','player2-field'];
+      hands.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'flex'; });
+      fields.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'grid'; });
+      const draw = document.getElementById('drawBtn');
+      const endT = document.getElementById('endTurnBtn');
+      if (draw) draw.style.display = 'inline-block';
+      if (endT) endT.style.display = 'inline-block';
+    }
+
+    function hideUntilFlip() {
+      // Keep everything hidden until the coin finishes
+      const hands  = ['player1-hand','player2-hand'];
+      const fields = ['player1-field','player2-field'];
+      hands.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      fields.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      const draw = document.getElementById('drawBtn');
+      const endT = document.getElementById('endTurnBtn');
+      if (draw) draw.style.display = 'none';
+      if (endT) endT.style.display = 'none';
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       const urlParams   = new URLSearchParams(window.location.search);
@@ -99,6 +123,9 @@
         document.getElementById('spectatorStyles').disabled = true;
       }
 
+      // Only the Start button should be visible before coin flip (unless mock mode)
+      if (!isSpectator && !isMock) hideUntilFlip();
+
       if (isMock) {
         document.getElementById('controls').style.display = 'flex';
         document.getElementById('player1-hand').style.display = 'flex';
@@ -110,12 +137,28 @@
       const startBtn = document.getElementById('startPracticeBtn');
       if (startBtn) {
         startBtn.addEventListener('click', async () => {
-          console.log('🎮 Starting practice duel...');
-          startBtn.disabled = true;
-          startBtn.textContent = 'Initializing...';
-          await loadPracticeDuel();                    // calls /api/bot/practice via proxy
-          await flipCoin(duelState.currentPlayer);     // animate to match backend winner
-          startBtn.textContent = '✅ Practice Ready';
+          try {
+            console.log('🎮 Starting practice duel...');
+            startBtn.disabled = true;
+            startBtn.textContent = 'Initializing...';
+
+            // 1) Ask backend to init duel + return who goes first, but don't render yet
+            await loadPracticeDuel({ deferShow: true }); // calls /api/bot/practice via proxy
+
+            // 2) Run the coin flip animation to match backend's chosen starter
+            startBtn.textContent = 'Flipping coin...';
+            await flipCoin(duelState.currentPlayer);     // animate to match backend winner
+
+            // 3) Reveal UI and render with already-fetched state
+            showAfterFlip();
+            renderDuelUI();
+
+            startBtn.textContent = '✅ Practice Ready';
+          } catch (e) {
+            console.error('❌ Start failed:', e);
+            startBtn.disabled = false;
+            startBtn.textContent = '🎮 Start Practice Duel';
+          }
         });
       }
 
