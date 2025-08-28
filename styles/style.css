@@ -346,3 +346,36 @@ body.mock-mode #duel-ui {
   border-radius: 6px;
   opacity: 0.2;
 }
+
+/* =========================
+   DUEL-READY GATING (new)
+   ========================= */
+
+/* Hide hands/fields + draw/end buttons until the app marks the page duel-ready */
+body:not(.duel-ready) #player1-hand,
+body:not(.duel-ready) #player2-hand,
+body:not(.duel-ready) #player1-field,
+body:not(.duel-ready) #player2-field,
+body:not(.duel-ready) #drawBtn,
+body:not(.duel-ready) #endTurnBtn {
+  display: none !important;
+}
+
+/* Once ready, reveal zones/buttons (these restore your intended layouts) */
+body.duel-ready #player1-hand,
+body.duel-ready #player2-hand {
+  display: flex !important;
+}
+body.duel-ready #player1-field,
+body.duel-ready #player2-field {
+  display: grid !important;
+}
+body.duel-ready #drawBtn,
+body.duel-ready #endTurnBtn {
+  display: inline-block !important;
+}
+
+/* Optionally auto-hide the Start button after we're ready (JS also hides it) */
+body.duel-ready #startPracticeBtn {
+  display: none !important;
+}
