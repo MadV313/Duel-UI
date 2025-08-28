@@ -144,9 +144,10 @@ body {
 
 /* Face-Down Trap Styling */
 .card.face-down {
-  filter: grayscale(100%);
-  opacity: 0.85;
-  border: 2px dashed #555;
+  /* was grayscale + 0.85 opacity — make backs crisp & full color */
+  filter: none;
+  opacity: 1;
+  border: 2px solid #555;
 }
 
 /* Optional Type-based Borders */
@@ -284,7 +285,7 @@ body.mock-mode #duel-ui {
      112px 0 0 0 rgba(255,255,255,0.25);
 }
 
-/* Hands: center 3 cards, allow deck placeholder */
+/* Hands: center 3 cards, reserve space for deck */
 #player1-hand, #player2-hand {
   display: flex !important;
   justify-content: center;
@@ -292,35 +293,37 @@ body.mock-mode #duel-ui {
   gap: 12px;
   margin-bottom: 16px;
   min-height: 160px; /* visual stability */
-  position: relative; /* for pseudo “deck” */
+  position: relative; /* anchor deck pseudo-elements */
   max-width: 480px;
   margin-left: auto;
   margin-right: auto;
 }
 
-/* Deck placeholders (no DOM changes needed) */
+/* reserve deck space so it never overlaps or drifts */
+#player1-hand { padding-right: 120px; }  /* deck on RIGHT */
+#player2-hand { padding-left: 120px; }   /* deck on LEFT  */
+
+/* Deck placeholders: now ABSOLUTE (won’t get pushed by draws) */
 #player1-hand::after,
 #player2-hand::before {
   content: "";
-  display: block;                  /* behaves like a flex item */
+  position: absolute;
+  top: 10px;
   width: 100px;
   height: 140px;
   background: url('../images/cards/000_CardBack_Unique.png') center / cover no-repeat;
   border-radius: 6px;
-  filter: grayscale(100%);
-  opacity: 0.95;
+  /* full-color, crisp */
+  filter: none;
+  opacity: 1;
   box-shadow: 0 0 6px rgba(0,0,0,0.6);
   border: 2px solid rgba(255,255,255,0.15);
   pointer-events: none;
+  z-index: 1;
 }
 
-#player1-hand::after {  /* player deck at RIGHT */
-  margin-left: 12px;
-}
-
-#player2-hand::before { /* opponent deck at LEFT */
-  margin-right: 12px;
-}
+#player1-hand::after {  right: 0; } /* player deck at RIGHT */
+#player2-hand::before { left:  0; } /* opponent deck at LEFT */
 
 /* Control bar */
 #controls {
