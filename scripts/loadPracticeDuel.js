@@ -12,6 +12,11 @@ import { API_BASE } from './config.js';
 function $(id) { return document.getElementById(id); }
 function hide(el) { if (el) el.style.display = 'none'; }
 function show(el, disp) { if (el) el.style.display = disp; }
+function setDuelReady(flag) {
+  try {
+    document.body.classList.toggle('duel-ready', !!flag);
+  } catch {}
+}
 
 function hideZonesAndControlsExceptStart() {
   hide($('player1-hand'));
@@ -23,6 +28,9 @@ function hideZonesAndControlsExceptStart() {
   controls.forEach(btn => {
     if (btn && btn.id !== 'startPracticeBtn') hide(btn);
   });
+
+  // CSS gate as well (keeps everything hidden until we flip)
+  setDuelReady(false);
 }
 
 function showZonesAndControls() {
@@ -35,6 +43,9 @@ function showZonesAndControls() {
   controls.forEach(btn => {
     if (btn && btn.id !== 'startPracticeBtn') show(btn, 'inline-block');
   });
+
+  // Let CSS reveal the rest and auto-hide Start
+  setDuelReady(true);
 }
 
 export async function loadPracticeDuel() {
@@ -116,7 +127,12 @@ export async function loadPracticeDuel() {
 
   // 7) Now reveal zones and render the "dealt" state
   const s = $('startPracticeBtn');
-  if (s) { s.disabled = true; s.textContent = '✅ Practice Ready'; }
+  if (s) {
+    s.disabled = true;
+    s.textContent = '✅ Practice Ready';
+    // Also hide the start button explicitly (CSS gate will hide too)
+    hide(s);
+  }
 
   showZonesAndControls();
 
