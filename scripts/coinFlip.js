@@ -8,15 +8,12 @@ import { triggerAnimation } from './animations.js';
 
 /**
  * Flip the coin and set the starting player.
- * Returns a Promise that resolves with the winner after the (optional) animation finishes,
- * so callers can `await flipCoin(...)` and only reveal/deal cards once it’s done.
- *
  * @param {'player1'|'player2'|null} forceWinner  Optional winner override (e.g., from backend)
  * @param {Object} opts
  * @param {boolean} [opts.animate=true]  Show overlay + gif
  * @param {number}  [opts.duration=1500] Animation duration in ms
  * @param {boolean} [opts.announce=true] Show announcement text
- * @returns {Promise<'player1'|'player2'>} winner
+ * @returns {'player1'|'player2'} winner
  */
 export function flipCoin(forceWinner = null, opts = {}) {
   const {
@@ -44,17 +41,17 @@ export function flipCoin(forceWinner = null, opts = {}) {
       ? `🪙 Heads! ${p1Name} goes first!`
       : `🪙 Tails! ${p2Name} goes first!`;
 
-  // Update turn banner immediately so the UI reflects the result even if we skip animation
+  // Update turn banner (and reveal it only now)
   const turnEl = document.getElementById('turn-display');
   if (turnEl) {
     const who = decided === 'player1' ? p1Name : p2Name;
-    turnEl.textContent = `${who} to act`;
+    turnEl.textContent = `Turn: ${who}`;
+    turnEl.classList.remove('hidden'); // 👈 reveal after flip
   }
 
   if (!animate) {
-    // No animation: just re-render with new currentPlayer and resolve immediately
     renderDuelUI();
-    return Promise.resolve(decided);
+    return decided;
   }
 
   // Overlay announcement
@@ -71,13 +68,12 @@ export function flipCoin(forceWinner = null, opts = {}) {
   // Nice golden pulse
   triggerAnimation('combo');
 
-  // Resolve after the animation has finished so callers can await it
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      if (overlay) overlay.classList.add('hidden');
-      if (gif) gif.style.display = 'none';
-      renderDuelUI();
-      resolve(decided);
-    }, Math.max(600, duration));
-  });
+  // Wrap up
+  setTimeout(() => {
+    if (overlay) overlay.classList.add('hidden');
+    if (gif) gif.style.display = 'none';
+    renderDuelUI();
+  }, Math.max(600, duration));
+
+  return decided;
 }
