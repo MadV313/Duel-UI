@@ -1,6 +1,65 @@
+# ── VCS / Meta
 .git
+.gitignore
+.gitattributes
+
+# ── OS / Editor
+**/.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.swp
+
+# ── Node noise
 node_modules
-npm-debug.log
+**/node_modules
+npm-debug.log*
+yarn-error.log*
+.pnp.*
+.pnpm-store
+
+# ── Logs & temp
+logs
+*.log
+*.tmp
+tmp
+temp
+.nyc_output
+
+# ── Tests / reports
+coverage
+**/__tests__/
+**/__mocks__/
+cypress
+playwright-report
+test-results
+
+# ── Build artifacts from other tools
+dist
+build
+out
+.next
+.cache
+.parcel-cache
+.storybook
+.vite
+
+# ── Source maps (optional)
+**/*.map
+
+# ── Env files (Railway uses dashboard env vars)
+.env
+.env.*
+!**/.env.example
+
+# ── Docker files themselves (not needed in context for Nixpacks)
 Dockerfile
 .dockerignore
-**/.DS_Store
+
+# ── Keep runtime assets explicitly (safety pin; these are INCLUDED)
+!public/**
+!images/**
+!styles/**
+!scripts/**
+!data/**
+!CoreMasterReference/**
