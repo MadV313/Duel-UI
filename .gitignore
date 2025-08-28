@@ -1,21 +1,73 @@
-# macOS and system files
+# ─────────────────────────────────────────────
+# OS / Editor junk
+# ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# Logs and environments
-*.log
-.env
-
-# Node and build tools (if added later)
-node_modules/
-dist/
-.cache/
-build/
-
-# Backup or temp files
-*.bak
-*.tmp
 *.swp
+*.swo
+*.tmp
+*.temp
+~$*
+.vscode/
+.idea/
 
-# Optional GitHub Pages artifacts
+# ─────────────────────────────────────────────
+# Logs
+# ─────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─────────────────────────────────────────────
+# Env files (manage via Railway dashboard)
+# ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─────────────────────────────────────────────
+# Node / package managers
+# ─────────────────────────────────────────────
+node_modules/
+.pnp.*
+.pnpm-store/
+.npm/
+.yarn/*
+
+# ─────────────────────────────────────────────
+# Build artifacts & caches (various toolchains)
+# ─────────────────────────────────────────────
+dist/
+build/
+out/
+.cache/
+.parcel-cache/
+.vite/
+.next/
+.nuxt/
+.storybook/
+.turbo/
+coverage/
+.eslintcache
+.stylelintcache
+
+# ─────────────────────────────────────────────
+# Test tooling
+# ─────────────────────────────────────────────
+cypress/
+playwright-report/
+test-results/
+
+# ─────────────────────────────────────────────
+# Site generators
+# ─────────────────────────────────────────────
 _site/
+
+# ─────────────────────────────────────────────
+# Misc
+# ─────────────────────────────────────────────
+.nyc_output/
+tmp/
+temp/
