@@ -78,15 +78,18 @@
     import { flipCoin } from './scripts/coinFlip.js';
     import { renderDuelUI } from './scripts/renderDuelUI.js';
     import { renderSpectatorView } from './scripts/spectatorView.js';
+    import { drawCard, endTurn } from './scripts/duel.js';
 
     // Expose bits used by inline onclicks / other scripts
-    window.flipCoin = flipCoin;
+    window.flipCoin   = flipCoin;
     window.loadPracticeDuel = loadPracticeDuel;
+    window.drawCard   = drawCard;
+    window.endTurn    = endTurn;
 
     document.addEventListener('DOMContentLoaded', () => {
-      const urlParams = new URLSearchParams(window.location.search);
+      const urlParams   = new URLSearchParams(window.location.search);
       const isSpectator = urlParams.get('spectator') === 'true';
-      const isMock = urlParams.get('mock') === 'true';
+      const isMock      = urlParams.get('mock') === 'true';
 
       if (isSpectator) {
         renderSpectatorView();
@@ -110,7 +113,7 @@
           console.log('🎮 Starting practice duel...');
           startBtn.disabled = true;
           startBtn.textContent = 'Initializing...';
-          await loadPracticeDuel();                    // should call /api/duel/start (through proxy)
+          await loadPracticeDuel();                    // calls /api/bot/practice via proxy
           await flipCoin(duelState.currentPlayer);     // animate to match backend winner
           startBtn.textContent = '✅ Practice Ready';
         });
