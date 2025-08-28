@@ -8,12 +8,15 @@ import { triggerAnimation } from './animations.js';
 
 /**
  * Flip the coin and set the starting player.
+ * Returns a Promise that resolves with the winner after the (optional) animation finishes,
+ * so callers can `await flipCoin(...)` and only reveal/deal cards once it’s done.
+ *
  * @param {'player1'|'player2'|null} forceWinner  Optional winner override (e.g., from backend)
  * @param {Object} opts
  * @param {boolean} [opts.animate=true]  Show overlay + gif
  * @param {number}  [opts.duration=1500] Animation duration in ms
  * @param {boolean} [opts.announce=true] Show announcement text
- * @returns {'player1'|'player2'} winner
+ * @returns {Promise<'player1'|'player2'>} winner
  */
 export function flipCoin(forceWinner = null, opts = {}) {
   const {
@@ -49,9 +52,9 @@ export function flipCoin(forceWinner = null, opts = {}) {
   }
 
   if (!animate) {
-    // No animation: just re-render with new currentPlayer
+    // No animation: just re-render with new currentPlayer and resolve immediately
     renderDuelUI();
-    return decided;
+    return Promise.resolve(decided);
   }
 
   // Overlay announcement
@@ -68,12 +71,13 @@ export function flipCoin(forceWinner = null, opts = {}) {
   // Nice golden pulse
   triggerAnimation('combo');
 
-  // Wrap up
-  setTimeout(() => {
-    if (overlay) overlay.classList.add('hidden');
-    if (gif) gif.style.display = 'none';
-    renderDuelUI();
-  }, Math.max(600, duration));
-
-  return decided;
+  // Resolve after the animation has finished so callers can await it
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (overlay) overlay.classList.add('hidden');
+      if (gif) gif.style.display = 'none';
+      renderDuelUI();
+      resolve(decided);
+    }, Math.max(600, duration));
+  });
 }
