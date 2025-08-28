@@ -9,6 +9,7 @@ function asIdString(cardId) {
 /**
  * Render the hand for a given player.
  * - When `isSpectator` is true, clicks are disabled.
+ * - Opponent (player2) hand is auto face-down for non-spectators.
  * - Accepts card entries as objects ({cardId,isFaceDown}) or raw ids.
  * - Adds data-* attributes for easier debugging/inspection.
  */
@@ -26,34 +27,36 @@ export function renderHand(player, isSpectator = false) {
   console.log(`🖐️ Rendering hand for ${player} (${hand.length} cards)`, hand);
 
   if (hand.length === 0) {
-    // Optional: placeholder slot(s) for layout stability
-    // const placeholder = document.createElement('div');
-    // placeholder.className = 'card slot-placeholder';
-    // handContainer.appendChild(placeholder);
     return;
   }
 
+  // ✅ Hide opponent's hand unless spectator
+  const hideHand = !isSpectator && player === 'player2';
+
   hand.forEach((entry, index) => {
     // Normalize entry
-    const cardId =
+    const rawId =
       typeof entry === 'object' && entry !== null
         ? (entry.cardId ?? entry.id ?? entry.card_id ?? '000')
         : entry;
 
+    // If we're hiding, force face-down regardless of entry flag
     const isFaceDown =
-      typeof entry === 'object' && entry !== null
-        ? Boolean(entry.isFaceDown)
-        : false;
+      hideHand
+        ? true
+        : (typeof entry === 'object' && entry !== null ? Boolean(entry.isFaceDown) : false);
 
-    const el = renderCard(asIdString(cardId), isFaceDown);
+    const cardIdStr = asIdString(rawId);
+    const el = renderCard(cardIdStr, isFaceDown);
 
     // Debug attrs
     el.dataset.player = player;
     el.dataset.index = String(index);
-    el.dataset.cardId = asIdString(cardId);
+    el.dataset.cardId = cardIdStr;
     el.dataset.faceDown = String(isFaceDown);
 
-    if (!isSpectator) {
+    // Interactions: only on your own (visible) hand in player view
+    if (!isSpectator && !hideHand) {
       el.classList.add('clickable');
       el.title = 'Click to discard this card';
       el.addEventListener('click', () => {
