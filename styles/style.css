@@ -477,3 +477,31 @@ a.return-to-hub:hover {
   transform: scale(1.05) !important;
   box-shadow: 0 0 10px #00ffff !important;
 }
+
+/* ------- Card action picker & highlights ------- */
+.card.hovering { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: 2px; }
+.card.selected { box-shadow: 0 0 16px rgba(250, 204, 21, 0.9); }
+
+.card-action-menu {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: rgba(0,0,0,0.85);
+  border: 2px solid #00ffff;
+  border-radius: 10px;
+  padding: 6px;
+  z-index: 10050;
+  display: flex;
+  gap: 6px;
+  box-shadow: 0 0 10px rgba(0,255,255,0.25);
+}
+.card-action-menu.hidden { display: none; }
+.card-action-menu button {
+  background: #facc15;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.card-action-menu button:hover { transform: translateY(-1px); }
