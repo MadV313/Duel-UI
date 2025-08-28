@@ -6,7 +6,7 @@ body {
   background-size: cover;
   background-color: #000;
   font-family: Arial, sans-serif;
-  overflow: hidden; /* prevent scroll bounce */
+  overflow: hidden;
 }
 
 /* Snowfall GIF Overlay */
@@ -17,7 +17,7 @@ body {
   width: 100%;
   height: 100%;
   background: url('../images/effects/snowfall.gif') center center / cover no-repeat;
-  pointer-events: none; /* never block clicks */
+  pointer-events: none;
   z-index: 2;
   opacity: 0.5;
 }
@@ -29,7 +29,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* animations don't block UI */
+  pointer-events: none;
   z-index: 999;
 }
 
@@ -128,7 +128,6 @@ body {
   text-align: center;
   position: relative;
   width: 100px;
-  z-index: 5; /* above snowfall */
 }
 
 .card-image {
@@ -178,17 +177,7 @@ body {
   100% { box-shadow: 0 0 0 gold; }
 }
 
-/* Coin Flip Overlay + Animation
-   (match the HTML id=coinFlipContainer used in index.html) */
-#coinFlipContainer {
-  display: none; /* toggled by JS */
-  position: fixed;
-  top: 40%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1000; /* above animations */
-}
-
+/* Coin Flip Overlay + Animation */
 .coin-flip-container {
   display: flex;
   flex-direction: column;
@@ -225,23 +214,6 @@ body {
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* Announcement overlay used by #announcement element */
-.overlay {
-  position: fixed;
-  top: 12%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.75);
-  color: #f0f0f0;
-  border: 1px solid #00ffff55;
-  border-radius: 8px;
-  font-weight: bold;
-  z-index: 1000;
-  pointer-events: none; /* never block clicks */
-}
-.hidden { display: none !important; }
-
 /* Mock Mode Support */
 body.mock-mode #duel-ui {
   display: block !important;
@@ -269,8 +241,6 @@ body.mock-mode #duel-ui {
   color: #f0f0f0;
   font-size: 2.2rem;        /* roughly double of 1.1rem */
   font-weight: bold;
-  position: relative;
-  z-index: 5;
 }
 
 #turn-display {
@@ -278,8 +248,6 @@ body.mock-mode #duel-ui {
   color: #f0f0f0;
   font-size: 1rem;
   margin-bottom: 8px;
-  position: relative;
-  z-index: 5;
 }
 
 #player1-field, #player2-field {
@@ -289,8 +257,6 @@ body.mock-mode #duel-ui {
   justify-content: center;
   margin: 8px auto 16px auto;
   max-width: 440px;
-  position: relative;
-  z-index: 5; /* above snowfall */
 }
 
 #player1-hand, #player2-hand {
@@ -298,8 +264,6 @@ body.mock-mode #duel-ui {
   justify-content: center;
   gap: 12px;
   margin-bottom: 16px;
-  position: relative;
-  z-index: 5;
 }
 
 #controls {
@@ -309,8 +273,6 @@ body.mock-mode #duel-ui {
   gap: 16px;
   margin: 20px auto;
   max-width: 600px;
-  position: relative;
-  z-index: 10; /* keep buttons on top */
 }
 
 #controls button {
@@ -338,8 +300,6 @@ body.mock-mode #duel-ui {
   gap: 40px;
   margin-top: -10px;
   margin-bottom: 20px;
-  position: relative;
-  z-index: 5;
 }
 
 .health-bar-container {
@@ -356,19 +316,4 @@ body.mock-mode #duel-ui {
   width: 100%; /* This will shrink via JS */
   background: linear-gradient(to right, limegreen, gold);
   transition: width 0.3s ease;
-}
-
-/* Return to Hub link — keep small and out of the way */
-.return-to-hub {
-  position: fixed;
-  bottom: 12px;
-  left: 12px;
-  background: rgba(0,0,0,0.6);
-  color: #f0f0f0;
-  text-decoration: none;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid #ffffff22;
-  font-weight: bold;
-  z-index: 20; /* never cover the whole screen */
 }
