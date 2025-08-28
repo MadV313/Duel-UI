@@ -10,16 +10,18 @@ import { triggerAnimation } from './animations.js';
  * Flip the coin and set the starting player.
  * @param {'player1'|'player2'|null} forceWinner  Optional winner override (e.g., from backend)
  * @param {Object} opts
- * @param {boolean} [opts.animate=true]  Show overlay + gif
- * @param {number}  [opts.duration=1500] Animation duration in ms
- * @param {boolean} [opts.announce=true] Show announcement text
+ * @param {boolean} [opts.animate=true]   Show overlay + gif
+ * @param {number}  [opts.duration=2600]  Total animation duration in ms (slowed down)
+ * @param {boolean} [opts.announce=true]  Show announcement text
+ * @param {number}  [opts.revealAt]       Milliseconds into the animation to reveal winner
  * @returns {'player1'|'player2'} winner
  */
 export function flipCoin(forceWinner = null, opts = {}) {
   const {
     animate = true,
-    duration = 1500,
+    duration = 2600,     // ⏱ slower default so it doesn’t look glitched
     announce = true,
+    revealAt,            // optional custom reveal timing
   } = opts;
 
   // Prefer forced winner → existing state → random
@@ -28,7 +30,7 @@ export function flipCoin(forceWinner = null, opts = {}) {
     duelState.currentPlayer ||
     (Math.random() < 0.5 ? 'player1' : 'player2');
 
-  // Set and log
+  // Set it now; we’ll reveal visually a bit later during the animation
   duelState.currentPlayer = decided;
 
   const p1 = duelState?.players?.player1 || {};
@@ -41,39 +43,45 @@ export function flipCoin(forceWinner = null, opts = {}) {
       ? `🪙 Heads! ${p1Name} goes first!`
       : `🪙 Tails! ${p2Name} goes first!`;
 
-  // Update turn banner (and reveal it only now)
+  // Elements
+  const overlay = document.getElementById('announcement');
+  const gif = document.getElementById('coinFlipContainer');
   const turnEl = document.getElementById('turn-display');
-  if (turnEl) {
-    const who = decided === 'player1' ? p1Name : p2Name;
-    turnEl.textContent = `Turn: ${who}`;
-    turnEl.classList.remove('hidden'); // 👈 reveal after flip
-  }
 
+  // If not animating, reveal immediately and render
   if (!animate) {
+    if (turnEl) {
+      turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
+      turnEl.classList.remove('hidden');
+    }
     renderDuelUI();
     return decided;
   }
 
-  // Overlay announcement
-  const overlay = document.getElementById('announcement');
+  // Stage 1: start flip — show "Flipping…" first
+  if (gif) gif.style.display = 'block';
   if (overlay && announce) {
-    overlay.textContent = resultText;
+    overlay.textContent = '🪙 Flipping…';
     overlay.classList.remove('hidden');
   }
-
-  // Coin GIF (optional)
-  const gif = document.getElementById('coinFlipContainer');
-  if (gif) gif.style.display = 'block';
-
-  // Nice golden pulse
   triggerAnimation('combo');
 
-  // Wrap up
+  // Stage 2: reveal winner mid-animation for readability
+  const revealMs = Math.max(700, Math.min(duration - 500, revealAt ?? Math.floor(duration * 0.6)));
+  setTimeout(() => {
+    if (overlay && announce) overlay.textContent = resultText;
+    if (turnEl) {
+      turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
+      turnEl.classList.remove('hidden'); // reveal banner now, not earlier
+    }
+  }, revealMs);
+
+  // Stage 3: wrap up and render
   setTimeout(() => {
     if (overlay) overlay.classList.add('hidden');
     if (gif) gif.style.display = 'none';
     renderDuelUI();
-  }, Math.max(600, duration));
+  }, duration);
 
   return decided;
 }
