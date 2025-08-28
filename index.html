@@ -47,8 +47,8 @@
     <div>Challenger HP: <span id="player1-hp">200</span></div>
     <div>Opponent HP: <span id="player2-hp">200</span></div>
   </div>
-  <!-- 👇 hidden until coin flip completes -->
-  <div id="turn-display" class="hidden"></div>
+  <!-- 👇 hard-hidden until the coin flip completes -->
+  <div id="turn-display" class="hidden" style="display:none"></div>
 
   <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
@@ -75,68 +75,57 @@
   <!-- Inline Script Bindings -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
-    import { duelState } from './scripts/duelState.js';
-    import { flipCoin } from './scripts/coinFlip.js';
-    import { renderDuelUI } from './scripts/renderDuelUI.js';
     import { renderSpectatorView } from './scripts/spectatorView.js';
     import { drawCard, endTurn } from './scripts/duel.js';
 
     // Expose bits used by inline onclicks / other scripts
-    window.flipCoin         = flipCoin;
     window.loadPracticeDuel = loadPracticeDuel;
     window.drawCard         = drawCard;
     window.endTurn          = endTurn;
 
-    function showAfterFlip() {
-      const hands  = ['player1-hand','player2-hand'];
-      const fields = ['player1-field','player2-field'];
-      hands.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'flex'; });
-      fields.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'grid'; });
-      const draw = document.getElementById('drawBtn');
-      const endT = document.getElementById('endTurnBtn');
-      if (draw) draw.style.display = 'inline-block';
-      if (endT) endT.style.display = 'inline-block';
-    }
+    function $(id){ return document.getElementById(id); }
+    function hide(el){ if(el) el.style.display='none'; }
+    function show(el,disp){ if(el) el.style.display=disp; }
 
     function hideUntilFlip() {
       const hands  = ['player1-hand','player2-hand'];
       const fields = ['player1-field','player2-field'];
-      hands.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-      fields.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-      const draw = document.getElementById('drawBtn');
-      const endT = document.getElementById('endTurnBtn');
-      if (draw) draw.style.display = 'none';
-      if (endT) endT.style.display = 'none';
-      // keep the banner hidden until flip
-      const turn = document.getElementById('turn-display');
-      if (turn) turn.classList.add('hidden');
+      hands.forEach(id => hide($(id)));
+      fields.forEach(id => hide($(id)));
+      hide($('drawBtn'));
+      hide($('endTurnBtn'));
+      const turn = $('turn-display');
+      if (turn) { turn.classList.add('hidden'); turn.style.display = 'none'; }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function init() {
       const urlParams   = new URLSearchParams(window.location.search);
       const isSpectator = urlParams.get('spectator') === 'true';
       const isMock      = urlParams.get('mock') === 'true';
 
       if (isSpectator) {
         renderSpectatorView();
-        document.getElementById('controls').style.display = 'none';
-        document.getElementById('spectatorStyles').disabled = false;
+        const controls = $('controls');
+        if (controls) controls.style.display = 'none';
+        const spec = $('spectatorStyles');
+        if (spec) spec.disabled = false;
       } else {
-        document.getElementById('spectatorStyles').disabled = true;
+        const spec = $('spectatorStyles');
+        if (spec) spec.disabled = true;
       }
 
       // Only the Start button should be visible before coin flip (unless mock mode)
       if (!isSpectator && !isMock) hideUntilFlip();
 
       if (isMock) {
-        document.getElementById('controls').style.display = 'flex';
-        document.getElementById('player1-hand').style.display = 'flex';
-        document.getElementById('player2-hand').style.display = 'flex';
-        document.getElementById('player1-field').style.display = 'flex';
-        document.getElementById('player2-field').style.display = 'flex';
+        $('controls').style.display = 'flex';
+        show($('player1-hand'),'flex');
+        show($('player2-hand'),'flex');
+        show($('player1-field'),'flex');
+        show($('player2-field'),'flex');
       }
 
-      const startBtn = document.getElementById('startPracticeBtn');
+      const startBtn = $('startPracticeBtn');
       if (startBtn) {
         startBtn.addEventListener('click', async () => {
           try {
@@ -144,16 +133,9 @@
             startBtn.disabled = true;
             startBtn.textContent = 'Initializing...';
 
-            // Init practice duel (does NOT reveal UI yet)
+            // ⚠️ Important: loadPracticeDuel() already performs the coin flip
+            // and reveals the zones/buttons. Do NOT call flipCoin again here.
             await loadPracticeDuel();
-
-            // Flip coin (reveals the turn banner)
-            startBtn.textContent = 'Flipping coin...';
-            await flipCoin(duelState.currentPlayer);
-
-            // Reveal zones and render with fetched state
-            showAfterFlip();
-            renderDuelUI();
 
             startBtn.textContent = '✅ Practice Ready';
             startBtn.style.display = 'none'; // hide the button after start
@@ -166,7 +148,14 @@
       }
 
       console.log('[UI] Using API via', window.API_BASE);
-    });
+    }
+
+    // Fix for module/DOMContentLoaded race:
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+      init();
+    }
   </script>
 </body>
 </html>
