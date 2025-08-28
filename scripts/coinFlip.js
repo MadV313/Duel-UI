@@ -8,13 +8,16 @@ import { triggerAnimation } from './animations.js';
 
 /**
  * Flip the coin and set the starting player.
+ * Resolves AFTER the announcement/toast is hidden so callers can await it
+ * to sequence "flip → toast → reveal UI/cards".
+ *
  * @param {'player1'|'player2'|null} forceWinner  Optional winner override (e.g., from backend)
  * @param {Object} opts
  * @param {boolean} [opts.animate=true]   Show overlay + gif
  * @param {number}  [opts.duration=2600]  Total animation duration in ms (slowed down)
  * @param {boolean} [opts.announce=true]  Show announcement text
  * @param {number}  [opts.revealAt]       Milliseconds into the animation to reveal winner
- * @returns {'player1'|'player2'} winner
+ * @returns {Promise<'player1'|'player2'>} resolves with winner after animation ends
  */
 export function flipCoin(forceWinner = null, opts = {}) {
   const {
@@ -48,14 +51,14 @@ export function flipCoin(forceWinner = null, opts = {}) {
   const gif = document.getElementById('coinFlipContainer');
   const turnEl = document.getElementById('turn-display');
 
-  // If not animating, reveal immediately and render
+  // If not animating, reveal immediately and render, but still return a Promise for consistency
   if (!animate) {
     if (turnEl) {
       turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
       turnEl.classList.remove('hidden');
     }
     renderDuelUI();
-    return decided;
+    return Promise.resolve(decided);
   }
 
   // Stage 1: start flip — show "Flipping…" first
@@ -68,20 +71,22 @@ export function flipCoin(forceWinner = null, opts = {}) {
 
   // Stage 2: reveal winner mid-animation for readability
   const revealMs = Math.max(700, Math.min(duration - 500, revealAt ?? Math.floor(duration * 0.6)));
-  setTimeout(() => {
-    if (overlay && announce) overlay.textContent = resultText;
-    if (turnEl) {
-      turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
-      turnEl.classList.remove('hidden'); // reveal banner now, not earlier
-    }
-  }, revealMs);
 
-  // Stage 3: wrap up and render
-  setTimeout(() => {
-    if (overlay) overlay.classList.add('hidden');
-    if (gif) gif.style.display = 'none';
-    renderDuelUI();
-  }, duration);
+  return new Promise(resolve => {
+    setTimeout(() => {
+      if (overlay && announce) overlay.textContent = resultText;
+      if (turnEl) {
+        turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
+        turnEl.classList.remove('hidden'); // reveal banner now, not earlier
+      }
+    }, revealMs);
 
-  return decided;
+    // Stage 3: wrap up and render, then resolve AFTER toast hides
+    setTimeout(() => {
+      if (overlay) overlay.classList.add('hidden');
+      if (gif) gif.style.display = 'none';
+      renderDuelUI();
+      resolve(decided);
+    }, duration);
+  });
 }
