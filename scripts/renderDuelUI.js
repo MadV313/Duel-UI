@@ -3,6 +3,7 @@ import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 import { API_BASE, UI_BASE } from './config.js';
+import allCards from './allCards.js';
 
 const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
 
@@ -11,6 +12,17 @@ let botTurnInFlight = false;
 
 // UI-enforced limits (keeps display sane even if backend misbehaves)
 const MAX_FIELD_SLOTS = 3;
+const MAX_HP = 200;
+
+/* ------------------ small helpers ------------------ */
+function getMeta(cardId) {
+  const id = String(cardId).padStart(3, '0');
+  return allCards.find(c => c.card_id === id);
+}
+function isTrap(cardId) {
+  const t = String(getMeta(cardId)?.type || '').toLowerCase();
+  return t === 'trap';
+}
 
 /* ------------------ display helpers ------------------ */
 function nameOf(playerKey) {
@@ -64,9 +76,16 @@ function asIdString(id) {
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: asIdString(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
+    return { cardId: asIdString(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown) };
   }
   return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown) };
+}
+
+// Field entries: non-traps must be face-UP; traps face-DOWN (UI guarantee)
+function toFieldEntry(objOrId) {
+  const base = toEntry(objOrId, false);
+  base.isFaceDown = isTrap(base.cardId) ? true : false;
+  return base;
 }
 
 function normalizePlayerForServer(p) {
@@ -117,10 +136,20 @@ function mergeServerIntoUI(server) {
   ['player1','player2'].forEach(pk => {
     const P = next?.players?.[pk];
     if (!P) return;
+
+    // Clamp HP in a friendly way (UI-side safety)
+    P.hp = Math.max(0, Math.min(MAX_HP, Number(P.hp ?? MAX_HP)));
+
     P.hand = Array.isArray(P.hand) ? P.hand.map(e => toEntry(e, pk === 'player2')) : [];
-    P.field = Array.isArray(P.field) ? P.field.map(e => toEntry(e, false)) : [];
+    // Force non-traps face-up on field; traps face-down
+    P.field = Array.isArray(P.field) ? P.field.map(toFieldEntry) : [];
     P.deck = Array.isArray(P.deck) ? P.deck.map(e => toEntry(e, false)) : [];
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
+
+    // Mask opponent hand to face-down for player view (visual only)
+    if (pk === 'player2') {
+      P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
+    }
   });
 
   // Enforce UI caps (don’t let >3 render)
@@ -149,11 +178,6 @@ function clampFields(state) {
         const extras = p.field.splice(MAX_FIELD_SLOTS); // remove beyond slots
         p.discardPile.push(...extras);
         console.warn(`[UI] Field overflow (${pk}) — moved ${extras.length} card(s) to discard for display cap.`);
-      }
-
-      // Mask opponent hand face-down for player view (purely visual)
-      if (pk === 'player2' && Array.isArray(p.hand)) {
-        p.hand = p.hand.map(e => ({ ...toEntry(e), isFaceDown: true }));
       }
     });
   } catch {}
