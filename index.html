@@ -47,8 +47,8 @@
     <div>Challenger HP: <span id="player1-hp">200</span></div>
     <div>Opponent HP: <span id="player2-hp">200</span></div>
   </div>
-  <!-- 👇 hard-hidden until the coin flip completes -->
-  <div id="turn-display" class="hidden" style="display:none"></div>
+  <!-- 👇 hidden until the coin flip completes -->
+  <div id="turn-display" class="hidden"></div>
 
   <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
@@ -94,8 +94,10 @@
       fields.forEach(id => hide($(id)));
       hide($('drawBtn'));
       hide($('endTurnBtn'));
+
+      // keep the banner hidden via class only (coinFlip will remove it)
       const turn = $('turn-display');
-      if (turn) { turn.classList.add('hidden'); turn.style.display = 'none'; }
+      if (turn) { turn.classList.add('hidden'); }
     }
 
     function init() {
