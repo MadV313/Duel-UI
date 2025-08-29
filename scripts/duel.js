@@ -8,7 +8,6 @@ import allCards from './allCards.js';
 // --- Config (UI guards)
 const MAX_FIELD_SLOTS = 3;
 const MAX_HAND        = 4;
-const MAX_HP          = 200;
 
 /* ---------------- helpers ---------------- */
 
@@ -32,7 +31,7 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
@@ -44,17 +43,12 @@ function ensureZones(p) {
   p.discardPile ||= [];
 }
 
-/** HP adjust with clamping to 0…MAX_HP */
+/** Cheap HP adjust with clamping (0–999) */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
   if (!p) return;
-  const before = Number(p.hp ?? 0);
-  const raw    = before + Number(delta);
-  const next   = Math.max(0, Math.min(MAX_HP, raw));
+  const next = Math.max(0, Math.min(999, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
-  if (raw !== next) {
-    console.log(`[hp] ${playerKey} change ${delta} capped to ${next}/${MAX_HP}`);
-  }
 }
 
 /* ---------- draw logic ---------- */
@@ -90,58 +84,58 @@ function drawFor(playerKey) {
   return true;
 }
 
-/* ---------- helpers for discard-after-use detection ---------- */
+/* ---------------- discard helpers ---------------- */
 
-function toTags(val) {
-  if (!val) return [];
-  if (Array.isArray(val)) return val.map(String);
-  return String(val)
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-}
-
-/** Robust detector for “this card should be discarded after it resolves” */
-function shouldDiscardAfterUse(meta) {
+/** Returns true if played card should be discarded after resolving. */
+function shouldAutoDiscard(meta) {
   if (!meta) return false;
-  const text = String(meta.effect || '').toLowerCase();
-  const tags = toTags(meta.tags).map(t => t.toLowerCase());
-  const type = String(meta.type || '').toLowerCase();
 
-  // Direct phrasing (many of your cards use this)
-  if (/(?:discard\s+(?:this\s+card\s+)?after\s+use|discard\s+after\s+use|one-?time|single-?use)/.test(text)) {
+  // Tags (if you ever add them): "consumable", "one_use", "discard_after_use"
+  const tags = (Array.isArray(meta.tags) ? meta.tags : String(meta.tags || '')
+    .split(',').map(s => s.trim().toLowerCase())).filter(Boolean);
+  if (tags.includes('discard_after_use') || tags.includes('consumable') || tags.includes('one_use')) {
     return true;
   }
-  // “Play from hand” is a good proxy for instants/consumables in your list
-  if (text.includes('play from hand') && type !== 'trap') return true;
 
-  // Tags that imply consumable behavior
-  if (tags.some(t => ['consumable','instant','one_time','single_use'].includes(t))) return true;
+  // Flexible phrase match from your JSON effect strings
+  const effect = String(meta.effect || '').toLowerCase();
+
+  // Common phrasing variations
+  const patterns = [
+    /discard\s+this\s+card\s+(?:after|upon)\s+use/,
+    /discard\s+after\s+use/,
+    /use:\s*discard\s+this\s+card/,
+    /then\s+discard\s+this\s+card/,
+  ];
+  if (patterns.some(rx => rx.test(effect))) return true;
+
+  // Heuristic: a lot of pure "attack" cards are one-shot. If you want that,
+  // uncomment the next line; otherwise we leave them unless text says so.
+  // if (String(meta.type || '').toLowerCase() === 'attack') return true;
 
   return false;
 }
 
-function moveCardFromFieldToDiscard(player, cardObj) {
-  const idx = player.field.lastIndexOf(cardObj);
+function moveFieldCardToDiscard(playerKey, cardObj) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  const idx = P.field.indexOf(cardObj);
   if (idx !== -1) {
-    player.field.splice(idx, 1);
-  } else {
-    // fallback safety
-    player.field.pop();
+    const [c] = P.field.splice(idx, 1);
+    P.discardPile.push(c);
   }
-  player.discardPile ||= [];
-  player.discardPile.push(cardObj);
 }
 
 /* ---------- very-lightweight effect resolver (UI side) ----------
-   This lets common effects feel responsive without needing backend resolve.
-   It parses friendly phrases in allCards.json "effect" text:
-     - "deal XX DMG"                       → damages opponent
-     - "heal/restore XX"                   → heals self (capped at MAX_HP)
-     - "draw N (loot) card(s)"             → draws
-     - "discard 1 card"                    → discards last from your hand
-     - "skip next draw"                    → sets a flag on the player
-   Traps are not resolved here—they remain face-down on the field.
+   NOTE: This is intentionally simple so we get visible outcomes
+   without depending on backend logic. It parses common phrases
+   in allCards.json "effect" text:
+     - "deal XX DMG" → damages opponent
+     - "heal XX"     → heals self
+     - "draw N card(s)" → draws
+     - "discard 1 card" → discards from your hand
+     - "skip next draw" → sets a flag on the player
+     - "destroy 1 enemy field card" → removes a foe field card (first or random)
 ----------------------------------------------------------------- */
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
@@ -159,8 +153,8 @@ function resolveImmediateEffect(meta, ownerKey) {
     triggerAnimation('bullet');
   }
 
-  // heal/restore X
-  const mHeal = text.match(/(?:heal|restore)\s+(\d+)/);
+  // heal X
+  const mHeal = text.match(/heal\s+(\d+)/);
   if (mHeal) {
     const heal = Number(mHeal[1]);
     changeHP(you, +heal);
@@ -168,15 +162,15 @@ function resolveImmediateEffect(meta, ownerKey) {
     triggerAnimation('heal');
   }
 
-  // draw N card(s) — tolerate “loot card” wording
-  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:\w+\s+)?card/);
+  // draw N card(s)
+  const mDraw = text.match(/draw\s+(a|\d+)\s+card/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // discard 1 card (from your hand) — discard last if any
-  if (/discard\s+1\s+card/.test(text)) {
+  // discard 1 card (from your hand) — we discard the last card if any
+  if (/discard\s+1\s+card(?!\s+after\s+use)/.test(text)) {
     const hand = duelState.players[you].hand;
     if (hand.length) {
       const tossed = hand.pop();
@@ -190,6 +184,20 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/skip\s+next\s+draw/.test(text)) {
     duelState.players[you].skipNextDraw = true;
     console.log(`⏭️ ${meta.name}: ${you} will skip their next draw`);
+  }
+
+  // destroy 1 enemy field card (generic)
+  if (/destroy\s+1\s+enemy\s+field\s+card/.test(text) || /remove\s+1\s+enemy\s+field\s+card/.test(text)) {
+    const foeField = duelState.players[foe].field || [];
+    if (foeField.length) {
+      // random if the text says random, else take the first
+      const idx = /random/.test(text) ? Math.floor(Math.random() * foeField.length) : 0;
+      const [destroyed] = foeField.splice(idx, 1);
+      duelState.players[foe].discardPile ||= [];
+      duelState.players[foe].discardPile.push(destroyed);
+      console.log(`💥 ${meta.name}: destroyed one of ${foe}'s field cards`);
+      triggerAnimation('explosion');
+    }
   }
 }
 
@@ -205,7 +213,7 @@ export function drawCard() {
  * Play a card from the current player's hand to their field.
  * - Interactive plays allowed only for local human (player1)
  * - Field has 3 slots (UI guard)
- * - Traps stay face-down; others resolve immediately and usually go to discard
+ * - Traps stay face-down; others resolve immediately and may auto-discard
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -247,19 +255,21 @@ export function playCard(cardIndex) {
     player.field.push(card);
     console.log(`🪤 Set trap: ${meta?.name ?? card.cardId} (face-down)`);
     triggerAnimation('trap');
-  } else {
-    // Non-traps: resolve immediately
-    card.isFaceDown = false;
-    player.field.push(card); // keep a ref so we can remove this exact object
-    resolveImmediateEffect(meta, playerKey);
-
-    // Discard-after-use detection (more robust than before)
-    if (shouldDiscardAfterUse(meta)) {
-      moveCardFromFieldToDiscard(player, card);
-    }
-    triggerAnimation('combo');
+    renderDuelUI();
+    return;
   }
 
+  // Non-traps: resolve immediately
+  card.isFaceDown = false;
+  player.field.push(card); // drop briefly for visuals
+  resolveImmediateEffect(meta, playerKey);
+
+  // Auto-discard the played card if effect / tags say so
+  if (shouldAutoDiscard(meta)) {
+    moveFieldCardToDiscard(playerKey, card);
+  }
+
+  triggerAnimation('combo');
   renderDuelUI();
 }
 
