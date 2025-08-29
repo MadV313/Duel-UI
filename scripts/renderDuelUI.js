@@ -9,9 +9,9 @@ const isSpectator = new URLSearchParams(window.location.search).get('spectator')
 // Prevent double-sending bot turns if render fires rapidly
 let botTurnInFlight = false;
 
+/* ------------------ display helpers ------------------ */
 function nameOf(playerKey) {
   const p = duelState?.players?.[playerKey] || {};
-  // prefer discordName → name → fallback
   return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Player 1');
 }
 
@@ -24,19 +24,18 @@ function setTurnText() {
     return;
   }
 
-  // Show friendly “whose turn” including the resolved display name
   const who = duelState.currentPlayer;
   const label = who === 'player1' ? 'Challenger' : 'Opponent';
   el.textContent = `Turn: ${label} — ${nameOf(who)}`;
 }
 
 function setHpText() {
-  const p1hp = document.getElementById('player1-hp');
-  const p2hp = document.getElementById('player2-hp');
-  if (p1hp) p1hp.textContent = duelState.players.player1.hp;
-  if (p2hp) p2hp.textContent = duelState.players.player2.hp;
+  const p1hpEl = document.getElementById('player1-hp');
+  const p2hpEl = document.getElementById('player2-hp');
+  if (p1hpEl) p1hpEl.textContent = duelState.players.player1.hp;
+  if (p2hpEl) p2hpEl.textContent = duelState.players.player2.hp;
 
-  // Also inject names into the labels if those containers exist
+  // also refresh the labels with names (keeps your existing markup)
   const hpWrap = document.getElementById('hp-display');
   try {
     const rows = hpWrap?.querySelectorAll('div');
@@ -49,20 +48,129 @@ function setHpText() {
   } catch {}
 }
 
-/** Fully renders the current state of the Duel UI */
-export function renderDuelUI() {
-  // Render hands and fields (disabled for spectators)
+/* ------------------ state normalizers ------------------ */
+function asIdString(id) {
+  return String(id).padStart(3, '0');
+}
+
+function toEntry(objOrId, defaultFaceDown = false) {
+  if (typeof objOrId === 'object' && objOrId !== null) {
+    const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
+    return { cardId: asIdString(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
+  }
+  return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown) };
+}
+
+function normalizePlayerForServer(p) {
+  if (!p) return { hp: 200, hand: [], field: [], deck: [], discardPile: [] };
+  return {
+    hp: Number(p.hp ?? 200),
+    hand: Array.isArray(p.hand) ? p.hand.map(e => toEntry(e, false)) : [],
+    field: Array.isArray(p.field) ? p.field.map(e => toEntry(e, false)) : [],
+    deck: Array.isArray(p.deck) ? p.deck.map(e => toEntry(e, false)) : [],
+    discardPile: Array.isArray(p.discardPile) ? p.discardPile.map(e => toEntry(e, false)) : [],
+    discordName: p.discordName || p.name || undefined,
+    name: p.name || undefined,
+  };
+}
+
+// Map UI state (player2) -> backend expectation (bot)
+function normalizeStateForServer(state) {
+  return {
+    mode: state.mode || 'practice',
+    currentPlayer: state.currentPlayer === 'player2' ? 'bot' : state.currentPlayer,
+    players: {
+      player1: normalizePlayerForServer(state?.players?.player1),
+      bot:     normalizePlayerForServer(state?.players?.player2),
+    }
+  };
+}
+
+// Merge backend reply (possibly using players.bot/currentPlayer=bot) back into UI duelState
+function mergeServerIntoUI(server) {
+  if (!server || typeof server !== 'object') return;
+
+  const next = structuredClone(server);
+
+  // Convert bot key back to player2
+  if (next?.players?.bot) {
+    next.players.player2 = next.players.bot;
+    delete next.players.bot;
+  }
+
+  if (next?.currentPlayer === 'bot') next.currentPlayer = 'player2';
+
+  // Ensure all arrays are normalized entries for consistency
+  ['player1','player2'].forEach(pk => {
+    const P = next?.players?.[pk];
+    if (!P) return;
+    P.hand = Array.isArray(P.hand) ? P.hand.map(e => toEntry(e, pk === 'player2')) : [];
+    P.field = Array.isArray(P.field) ? P.field.map(e => toEntry(e, false)) : [];
+    P.deck = Array.isArray(P.deck) ? P.deck.map(e => toEntry(e, false)) : [];
+    P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
+  });
+
+  Object.assign(duelState, next);
+}
+
+/* ----------------- render helpers ----------------- */
+function renderZones() {
+  // You: visible; Opponent: renderHand will auto-face-down in player view
   renderHand('player1', isSpectator);
   renderHand('player2', isSpectator);
   renderField('player1', isSpectator);
   renderField('player2', isSpectator);
+}
 
+/* ---------------- bot turn driver ----------------- */
+async function maybeRunBotTurn() {
+  if (botTurnInFlight) return;
+  if (isSpectator) return;
+  if (duelState.currentPlayer !== 'player2') return; // only when it's actually bot's turn
+
+  botTurnInFlight = true;
+  try {
+    const payload = normalizeStateForServer(duelState);
+
+    // Use the bot-turn endpoint; it expects players.bot & currentPlayer 'bot'
+    const res = await fetch(`${API_BASE}/bot/turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.error('[UI] Bot move failed:', res.status, txt);
+      return;
+    }
+
+    const updated = await res.json().catch(() => null);
+    if (updated) {
+      mergeServerIntoUI(updated);
+    }
+  } catch (err) {
+    console.error('[UI] Bot move error:', err);
+  } finally {
+    botTurnInFlight = false;
+    // Re-render after bot move (or failure) to keep UI fresh
+    setHpText();
+    setTurnText();
+    renderZones();
+  }
+}
+
+/* ------------------ main render ------------------ */
+export function renderDuelUI() {
+  // Ensure zones/buttons are allowed to show (CSS gate)
+  document.body.classList.add('duel-ready');
+
+  renderZones();
   setHpText();
   setTurnText();
 
   // If duel is over, save summary (non-spectator) and redirect
   if (duelState.winner) {
-    // Guard: only handle once
     if (!duelState.summarySaved && !isSpectator) {
       const duelId = `duel_${Date.now()}`;
       const summary = {
@@ -97,59 +205,14 @@ export function renderDuelUI() {
       })
         .catch(err => console.error('[UI] Summary save failed:', err))
         .finally(() => {
-          // If you have a dedicated summary page, this will show it
           window.location.href = `${UI_BASE}/summary.html?duelId=${duelId}`;
         });
     }
     return;
   }
 
-  // Bot turn driver: only when it's player2 (bot) AND not spectator
-  if (duelState.currentPlayer === 'player2' && !isSpectator) {
-    if (botTurnInFlight) return;
-    botTurnInFlight = true;
-
-    // Map UI state (player2) -> backend expectation (bot)
-    const payload = JSON.parse(JSON.stringify(duelState));
-    if (payload.players?.player2 && !payload.players.bot) {
-      payload.players.bot = payload.players.player2;
-      delete payload.players.player2;
-    }
-    if (payload.currentPlayer === 'player2') payload.currentPlayer = 'bot';
-
-    fetch(`${API_BASE}/duel/turn`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error(`Bot move failed: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(updated => {
-        // Map backend response (bot) -> UI state (player2)
-        if (updated?.players?.bot && !updated.players.player2) {
-          updated.players.player2 = updated.players.bot;
-          delete updated.players.bot;
-        }
-        if (updated?.currentPlayer === 'bot') updated.currentPlayer = 'player2';
-
-        Object.assign(duelState, updated);
-      })
-      .catch(err => {
-        console.error('[UI] Bot move error:', err);
-      })
-      .finally(() => {
-        botTurnInFlight = false;
-        // Re-render after bot move (or failure) to keep UI fresh
-        setHpText();
-        setTurnText();
-        renderHand('player1', isSpectator);
-        renderHand('player2', isSpectator);
-        renderField('player1', isSpectator);
-        renderField('player2', isSpectator);
-      });
+  // Kick the bot if it's their turn
+  if (duelState.currentPlayer === 'player2') {
+    void maybeRunBotTurn();
   }
 }
