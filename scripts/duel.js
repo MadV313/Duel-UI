@@ -1,27 +1,13 @@
-// scripts/duel.js — draw, play, discard, turn logic (UI ↔ backend)
+// scripts/duel.js — draw, play, discard, turn logic (UI-only)
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 import allCards from './allCards.js';
 
-// Try to use your config helpers if present
-let apiUrlFn = null;
-try {
-  // optional import at runtime – safe if config doesn’t export
-  const mod = await import('./config.js');
-  apiUrlFn = mod?.apiUrl || null;
-} catch { /* no-op, we'll fall back to window.API_BASE */ }
-
 // --- Config
 const MAX_FIELD_SLOTS = 3;
-
-// Helper to build API URLs robustly
-function api(path) {
-  if (apiUrlFn) return apiUrlFn(path);
-  const base = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : '/api';
-  return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
-}
+const MAX_HAND = 4;
 
 // Helper: find card metadata by numeric id or "003" string
 function findCardMeta(id) {
@@ -38,35 +24,54 @@ function setControlsDisabled(disabled) {
   buttons.forEach(b => (b.disabled = !!disabled));
 }
 
+/* ---------- normalization helpers ---------- */
+function toEntry(objOrId, faceDownDefault = false) {
+  if (typeof objOrId === 'object' && objOrId !== null) {
+    const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
+    return { cardId: String(cid).padStart(3, '0'), isFaceDown: Boolean(objOrId.isFaceDown) };
+  }
+  return { cardId: String(objOrId).padStart(3, '0'), isFaceDown: faceDownDefault };
+}
+
+/** Draw one card for a specific player. Returns true if a card was drawn. */
+function drawFor(playerKey) {
+  const player = duelState?.players?.[playerKey];
+  if (!player) return false;
+
+  if (!Array.isArray(player.hand)) player.hand = [];
+  if (!Array.isArray(player.deck)) player.deck = [];
+
+  if (player.hand.length >= MAX_HAND) {
+    console.log(`[draw] ${playerKey} hand full (${MAX_HAND}).`);
+    return false;
+  }
+  if (player.deck.length === 0) {
+    console.log(`[draw] ${playerKey} deck empty.`);
+    return false;
+  }
+
+  const raw = player.deck.shift();
+  // Bot's hand cards should appear face-down in UI
+  const entry = toEntry(raw, playerKey === 'player2');
+  player.hand.push(entry);
+
+  console.log(`[draw] ${playerKey} drew ${entry.cardId}`);
+  return true;
+}
+
+/* ---------- public actions ---------- */
+
+/** Manual Draw button */
 export function drawCard() {
-  const playerKey = duelState.currentPlayer; // 'player1' | 'player2'
-  const player = duelState.players[playerKey];
-  if (!player) return;
-
-  if (player.hand.length >= 4) {
-    alert('Hand full! Play or discard a card first.');
-    return;
-  }
-  if (!Array.isArray(player.deck) || player.deck.length === 0) {
-    console.log('📭 Deck empty.');
-    return;
-  }
-
-  const next = player.deck.shift(); // { cardId, isFaceDown? } or id
-  // Normalize to object
-  const obj = typeof next === 'object' && next !== null
-    ? next
-    : { cardId: next, isFaceDown: false };
-
-  player.hand.push(obj);
-  renderDuelUI();
+  const who = duelState.currentPlayer; // 'player1' | 'player2'
+  if (drawFor(who)) renderDuelUI();
 }
 
 /**
  * Play a card from the current player's hand to their field.
- * - Only the active player (player1 on your client) may play.
- * - Field has 3 slots.
- * - Traps stay face-down; others are face-up on play.
+ * - Interactive plays allowed only for local human (player1)
+ * - Field has 3 slots
+ * - Traps stay face-down; others are face-up on play
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -90,7 +95,9 @@ export function playCard(cardIndex) {
   let card = player.hand.splice(cardIndex, 1)[0];
   // Normalize
   if (typeof card !== 'object' || card === null) {
-    card = { cardId: card, isFaceDown: false };
+    card = { cardId: String(card).padStart(3, '0'), isFaceDown: false };
+  } else {
+    card.cardId = String(card.cardId ?? card.id ?? card.card_id ?? '000').padStart(3, '0');
   }
 
   // Decide face-up/face-down on play
@@ -128,8 +135,8 @@ export function discardCard(cardIndex) {
 
 /**
  * End your turn.
- * Swap to the opponent, apply start-of-turn effects, re-render,
- * then call the backend for the bot if it’s the bot’s turn.
+ * Swap players → auto-draw for the NEW player → start-turn buffs → render.
+ * (If it's the bot's turn, renderDuelUI will handle calling the backend.)
  */
 export async function endTurn() {
   try {
@@ -139,33 +146,13 @@ export async function endTurn() {
     duelState.currentPlayer =
       duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
 
+    // Auto-draw for whoever just became active
+    drawFor(duelState.currentPlayer);
+
+    // Apply start-of-turn effects and render
     applyStartTurnBuffs();
     triggerAnimation('turn');
-    renderDuelUI();
-
-    // If it's now the bot's turn, ask the backend to act and return a new state
-    if (duelState.currentPlayer === 'player2') {
-      try {
-        const url = api('/duel/turn');
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state: duelState })
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(`Bot turn failed ${res.status}: ${txt.slice(0, 250)}`);
-        }
-        const serverState = await res.json().catch(() => null);
-        if (serverState && typeof serverState === 'object') {
-          Object.assign(duelState, serverState);
-        }
-        renderDuelUI();
-      } catch (err) {
-        console.error('❌ /duel/turn error:', err);
-        // Don’t crash the client; leave the state as-is.
-      }
-    }
+    renderDuelUI(); // bot turn will be kicked from renderDuelUI
   } finally {
     setControlsDisabled(false);
   }
