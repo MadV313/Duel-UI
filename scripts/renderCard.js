@@ -3,6 +3,7 @@ import allCards from './allCards.js';
 
 /* Helpers */
 const ID_BACK = '000';
+const CARD_BACK_SRC = 'images/cards/000_CardBack_Unique.png';
 const imgPath = (img) => `images/cards/${img}`;
 
 // Normalize "tags" to an array (JSON sometimes has comma-strings)
@@ -31,45 +32,44 @@ export function getCardById(cardId) {
 
 /** Render a card node for hand or field */
 export function renderCard(cardId, isFaceDown = false) {
-  const cardData = getCardById(cardId);
-  const faceDownData = getCardById(ID_BACK);
+  const idStr = normalizeId(cardId);
+  const cardData = getCardById(idStr);
+  const faceDownData = getCardById(ID_BACK); // keep for metadata fallback
 
   const cardEl = document.createElement('div');
   cardEl.classList.add('card');
+  cardEl.dataset.cardId = idStr;
+  cardEl.dataset.faceDown = String(!!isFaceDown);
 
-  // Base metadata
+  // Base metadata (used only when face-up)
   const resolved = (!isFaceDown && cardData) ? cardData : faceDownData || cardData;
-  const tags = toTags(resolved?.tags);
+  const tags = toTags(!isFaceDown ? resolved?.tags : []);
 
   // Classes for styling
   if (isFaceDown) {
     cardEl.classList.add('face-down');
   } else if (resolved?.type) {
     cardEl.classList.add(String(resolved.type).toLowerCase()); // e.g. 'attack','defense','trap'
+    cardEl.dataset.type = String(resolved.type).toLowerCase();
   }
-  // Tag hooks (e.g. .tag-trap, .tag-fire)
+  // Tag hooks (e.g. .tag-trap, .tag-fire) — face-up only
   tags.forEach(t => cardEl.classList.add(`tag-${t.replace(/\s+/g, '_').toLowerCase()}`));
-
-  // Data attributes for debugging / future hooks
-  cardEl.dataset.cardId = normalizeId(cardId);
-  if (resolved?.type) cardEl.dataset.type = String(resolved.type).toLowerCase();
 
   // Image
   const img = document.createElement('img');
   img.classList.add('card-image');
   img.alt = isFaceDown ? 'Face-down card' : (resolved?.name || 'Unknown card');
 
-  // Prefer resolved image; fallback to back
-  const primaryImg = resolved?.image ? imgPath(resolved.image) : null;
-  const fallbackImg = faceDownData?.image ? imgPath(faceDownData.image) : primaryImg;
-  img.src = primaryImg || fallbackImg || '';
-
-  img.addEventListener('error', () => {
-    // Last-resort fallback
-    if (img.src !== fallbackImg && fallbackImg) {
-      img.src = fallbackImg;
-    }
-  });
+  if (isFaceDown) {
+    // ✅ Always show the dedicated back art when face-down
+    img.src = CARD_BACK_SRC;
+  } else {
+    const primaryImg = resolved?.image ? imgPath(resolved.image) : null;
+    img.src = primaryImg || CARD_BACK_SRC;
+    img.addEventListener('error', () => {
+      if (img.src !== CARD_BACK_SRC) img.src = CARD_BACK_SRC;
+    });
+  }
 
   // Name label
   const name = document.createElement('div');
@@ -83,7 +83,7 @@ export function renderCard(cardId, isFaceDown = false) {
     cardEl.title = 'Face-down card';
   }
 
-  // Subtle visual cues for notable tags
+  // Subtle visual cues for notable tags (face-up only)
   if (!isFaceDown && tags.length) {
     const hasCombo = tags.includes('combo_sniper') || tags.includes('combo_buff') || tags.includes('combo_crit');
     const hasDamageFX = tags.includes('fire') || tags.includes('explosion') || tags.includes('poison');
