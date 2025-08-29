@@ -12,10 +12,9 @@ import { API_BASE } from './config.js';
 function $(id) { return document.getElementById(id); }
 function hide(el) { if (el) el.style.display = 'none'; }
 function show(el, disp) { if (el) el.style.display = disp; }
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 function setDuelReady(flag) {
-  try {
-    document.body.classList.toggle('duel-ready', !!flag);
-  } catch {}
+  try { document.body.classList.toggle('duel-ready', !!flag); } catch {}
 }
 
 function hideZonesAndControlsExceptStart() {
@@ -25,12 +24,14 @@ function hideZonesAndControlsExceptStart() {
   hide($('player2-field'));
 
   const controls = document.querySelectorAll('#controls button');
-  controls.forEach(btn => {
-    if (btn && btn.id !== 'startPracticeBtn') hide(btn);
-  });
+  controls.forEach(btn => { if (btn && btn.id !== 'startPracticeBtn') hide(btn); });
 
   // CSS gate as well (keeps everything hidden until we flip)
   setDuelReady(false);
+
+  // keep the turn banner hidden until after the flip
+  const turn = $('turn-display');
+  if (turn) turn.classList.add('hidden');
 }
 
 function showZonesAndControls() {
@@ -40,9 +41,7 @@ function showZonesAndControls() {
   show($('player2-field'), 'grid');
 
   const controls = document.querySelectorAll('#controls button');
-  controls.forEach(btn => {
-    if (btn && btn.id !== 'startPracticeBtn') show(btn, 'inline-block');
-  });
+  controls.forEach(btn => { if (btn && btn.id !== 'startPracticeBtn') show(btn, 'inline-block'); });
 
   // Let CSS reveal the rest and auto-hide Start
   setDuelReady(true);
@@ -75,6 +74,9 @@ export async function loadPracticeDuel() {
   }
   if (data?.currentPlayer === 'bot') data.currentPlayer = 'player2';
 
+  // 2.1) Ensure mode for later bot turns
+  data.mode = data.mode || 'practice';
+
   // 3) Inject/derive display names (so the top-left shows YOUR name)
   try {
     const qs = new URLSearchParams(location.search);
@@ -106,9 +108,9 @@ export async function loadPracticeDuel() {
     if (opp && Array.isArray(opp.hand)) {
       opp.hand = opp.hand.map(entry => {
         if (entry && typeof entry === 'object') {
-          return { ...entry, isFaceDown: true };
+          return { ...entry, cardId: String(entry.cardId ?? entry.id ?? entry.card_id ?? '000').padStart(3,'0'), isFaceDown: true };
         }
-        return { cardId: entry, isFaceDown: true };
+        return { cardId: String(entry ?? '000').padStart(3,'0'), isFaceDown: true };
       });
     }
   } catch (e) {
@@ -118,9 +120,12 @@ export async function loadPracticeDuel() {
   // 5) Merge into UI state (but still keep zones hidden)
   Object.assign(duelState, data);
 
-  // 6) Coin flip FIRST (await so we only deal/reveal AFTER the animation)
+  // 6) Coin flip FIRST — make sure we DON'T reveal zones until after toast vanishes
+  const flipDuration = 2800; // matches coinFlip default-ish but a touch longer
   try {
-    await flipCoin(duelState.currentPlayer);
+    // Note: flipCoin is not Promise-based, so we explicitly wait the duration.
+    flipCoin(duelState.currentPlayer, { duration: flipDuration });
+    await sleep(flipDuration + 100); // small buffer so the overlay fully hides
   } catch (e) {
     console.warn('coinFlip animation issue (non-fatal):', e);
   }
@@ -130,7 +135,6 @@ export async function loadPracticeDuel() {
   if (s) {
     s.disabled = true;
     s.textContent = '✅ Practice Ready';
-    // Also hide the start button explicitly (CSS gate will hide too)
     hide(s);
   }
 
