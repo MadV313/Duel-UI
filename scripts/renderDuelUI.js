@@ -9,6 +9,9 @@ const isSpectator = new URLSearchParams(window.location.search).get('spectator')
 // Prevent double-sending bot turns if render fires rapidly
 let botTurnInFlight = false;
 
+// UI-enforced limits (keeps display sane even if backend misbehaves)
+const MAX_FIELD_SLOTS = 3;
+
 /* ------------------ display helpers ------------------ */
 function nameOf(playerKey) {
   const p = duelState?.players?.[playerKey] || {};
@@ -19,14 +22,19 @@ function setTurnText() {
   const el = document.getElementById('turn-display');
   if (!el) return;
 
+  // If an inline style hid this at load time, clear it now so it can show
+  el.style.display = '';
+
   if (duelState.winner) {
     el.textContent = `Winner: ${duelState.winner} (${nameOf(duelState.winner)})`;
+    el.classList.remove('hidden');
     return;
   }
 
   const who = duelState.currentPlayer;
   const label = who === 'player1' ? 'Challenger' : 'Opponent';
   el.textContent = `Turn: ${label} — ${nameOf(who)}`;
+  el.classList.remove('hidden');
 }
 
 function setHpText() {
@@ -76,6 +84,9 @@ function normalizePlayerForServer(p) {
 
 // Map UI state (player2) -> backend expectation (bot)
 function normalizeStateForServer(state) {
+  // Clamp fields before sending (prevents backend from getting >3 UI-induced)
+  clampFields(state);
+
   return {
     mode: state.mode || 'practice',
     currentPlayer: state.currentPlayer === 'player2' ? 'bot' : state.currentPlayer,
@@ -112,7 +123,40 @@ function mergeServerIntoUI(server) {
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
   });
 
+  // Enforce UI caps (don’t let >3 render)
+  clampFields(next);
+
   Object.assign(duelState, next);
+}
+
+/* --------------- UI safety clamps (display only) --------------- */
+function ensureArrays(p) {
+  p.hand ||= [];
+  p.field ||= [];
+  p.deck ||= [];
+  p.discardPile ||= [];
+}
+
+function clampFields(state) {
+  try {
+    ['player1', 'player2'].forEach(pk => {
+      const p = state?.players?.[pk];
+      if (!p) return;
+      ensureArrays(p);
+
+      // If field exceeds limit, move extras to discard (display safeguard)
+      if (Array.isArray(p.field) && p.field.length > MAX_FIELD_SLOTS) {
+        const extras = p.field.splice(MAX_FIELD_SLOTS); // remove beyond slots
+        p.discardPile.push(...extras);
+        console.warn(`[UI] Field overflow (${pk}) — moved ${extras.length} card(s) to discard for display cap.`);
+      }
+
+      // Mask opponent hand face-down for player view (purely visual)
+      if (pk === 'player2' && Array.isArray(p.hand)) {
+        p.hand = p.hand.map(e => ({ ...toEntry(e), isFaceDown: true }));
+      }
+    });
+  } catch {}
 }
 
 /* ----------------- render helpers ----------------- */
@@ -191,6 +235,9 @@ async function maybeRunBotTurn() {
 export function renderDuelUI() {
   // Ensure zones/buttons are allowed to show (CSS gate)
   document.body.classList.add('duel-ready');
+
+  // Defensive clamp before any draw
+  clampFields(duelState);
 
   renderZones();
   setHpText();
