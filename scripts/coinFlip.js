@@ -24,7 +24,7 @@ let coinFlipInProgress = false;
 export function flipCoin(forceWinner = null, opts = {}) {
   const {
     animate = true,
-    duration = 2600,     // ⏱ slower default so it doesn’t look glitched
+    duration = 2600,     // slower default so it doesn’t look glitched
     announce = true,
     revealAt,            // optional custom reveal timing
   } = opts;
@@ -65,7 +65,13 @@ export function flipCoin(forceWinner = null, opts = {}) {
     turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
     turnEl.classList.remove('hidden');
     // Some pages start with style="display:none"; clear it explicitly:
-    turnEl.style.display = '';
+    turnEl.style.removeProperty('display');
+  }
+
+  // Always start with the banner hidden until reveal moment
+  if (turnEl) {
+    turnEl.classList.add('hidden');
+    turnEl.style.display = 'none';
   }
 
   // If not animating, reveal immediately and render, but still return a Promise for consistency
@@ -78,11 +84,10 @@ export function flipCoin(forceWinner = null, opts = {}) {
 
   // Stage 1: start flip — show "Flipping…" first
   if (gif) gif.style.display = 'block';
-  if (overlay && announce) {
-    overlay.textContent = '🪙 Flipping…';
+  if (overlay) {
+    if (announce) overlay.textContent = '🪙 Flipping…';
     overlay.classList.remove('hidden');
-    // ensure visible if it had any inline styles previously
-    overlay.style.display = '';
+    overlay.style.removeProperty('display');
   }
   triggerAnimation('combo');
 
