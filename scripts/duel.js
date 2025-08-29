@@ -8,6 +8,7 @@ import allCards from './allCards.js';
 // --- Config (UI guards)
 const MAX_FIELD_SLOTS = 3;
 const MAX_HAND        = 4;
+const MAX_HP          = 200;
 
 /* ---------------- helpers ---------------- */
 
@@ -31,7 +32,7 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
@@ -43,12 +44,17 @@ function ensureZones(p) {
   p.discardPile ||= [];
 }
 
-/** Cheap HP adjust with clamping (0–999) */
+/** HP adjust with clamping to 0…MAX_HP */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
   if (!p) return;
-  const next = Math.max(0, Math.min(999, Number(p.hp ?? 0) + Number(delta)));
+  const before = Number(p.hp ?? 0);
+  const raw    = before + Number(delta);
+  const next   = Math.max(0, Math.min(MAX_HP, raw));
   p.hp = next;
+  if (raw !== next) {
+    console.log(`[hp] ${playerKey} change ${delta} capped to ${next}/${MAX_HP}`);
+  }
 }
 
 /* ---------- draw logic ---------- */
@@ -85,15 +91,14 @@ function drawFor(playerKey) {
 }
 
 /* ---------- very-lightweight effect resolver (UI side) ----------
-   NOTE: This is intentionally simple so we get visible outcomes
-   without depending on backend logic. It parses common phrases
-   in allCards.json "effect" text:
-     - "deal XX DMG" → damages opponent
-     - "heal XX"     → heals self
-     - "draw N card(s)" → draws
-     - "discard 1 card" → discards random/last
-     - "skip next draw" → sets a flag on the player
-     - "Discard this card after use." → moves to discard immediately
+   This lets common effects feel responsive without needing backend resolve.
+   It parses friendly phrases in allCards.json "effect" text:
+     - "deal XX DMG"                       → damages opponent
+     - "heal/restore XX"                   → heals self (capped at MAX_HP)
+     - "draw N (loot) card(s)"             → draws
+     - "discard 1 card"                    → discards last from your hand
+     - "skip next draw"                    → sets a flag on the player
+     - "Discard this card after use."      → move to discard immediately
    Traps are not resolved here—they remain face-down on the field.
 ----------------------------------------------------------------- */
 function resolveImmediateEffect(meta, ownerKey) {
@@ -112,8 +117,8 @@ function resolveImmediateEffect(meta, ownerKey) {
     triggerAnimation('bullet');
   }
 
-  // heal X
-  const mHeal = text.match(/heal\s+(\d+)/);
+  // heal/restore X
+  const mHeal = text.match(/(?:heal|restore)\s+(\d+)/);
   if (mHeal) {
     const heal = Number(mHeal[1]);
     changeHP(you, +heal);
@@ -121,14 +126,14 @@ function resolveImmediateEffect(meta, ownerKey) {
     triggerAnimation('heal');
   }
 
-  // draw N card(s)
-  const mDraw = text.match(/draw\s+(a|\d+)\s+card/);
+  // draw N card(s) — tolerate “loot card” wording
+  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:\w+\s+)?card/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // discard 1 card (from your hand) — we discard the last card if any
+  // discard 1 card (from your hand) — discard last if any
   if (/discard\s+1\s+card/.test(text)) {
     const hand = duelState.players[you].hand;
     if (hand.length) {
