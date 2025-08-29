@@ -90,7 +90,9 @@ function normalizeStateForServer(state) {
 function mergeServerIntoUI(server) {
   if (!server || typeof server !== 'object') return;
 
-  const next = structuredClone(server);
+  const next = typeof structuredClone === 'function'
+    ? structuredClone(server)
+    : JSON.parse(JSON.stringify(server));
 
   // Convert bot key back to player2
   if (next?.players?.bot) {
@@ -122,6 +124,26 @@ function renderZones() {
   renderField('player2', isSpectator);
 }
 
+/* ---------------- fetch helpers (bot) ---------------- */
+async function postBotTurn(payload) {
+  // Try /bot/turn first (your recent logs use this), then gracefully fall back to /duel/turn
+  let res = await fetch(`${API_BASE}/bot/turn`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (res.status === 404 || res.status === 405) {
+    // fallback route name used in some earlier builds
+    res = await fetch(`${API_BASE}/duel/turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+  return res;
+}
+
 /* ---------------- bot turn driver ----------------- */
 async function maybeRunBotTurn() {
   if (botTurnInFlight) return;
@@ -132,12 +154,17 @@ async function maybeRunBotTurn() {
   try {
     const payload = normalizeStateForServer(duelState);
 
-    // Use the bot-turn endpoint; it expects players.bot & currentPlayer 'bot'
-    const res = await fetch(`${API_BASE}/bot/turn`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    // Debug breadcrumb (minimal/non-sensitive)
+    try {
+      console.log('[UI→Bot] payload', {
+        mode: payload.mode,
+        currentPlayer: payload.currentPlayer,
+        p1: { hp: payload.players.player1.hp, hand: payload.players.player1.hand.length, field: payload.players.player1.field.length, deck: payload.players.player1.deck.length },
+        bot: { hp: payload.players.bot.hp, hand: payload.players.bot.hand.length, field: payload.players.bot.field.length, deck: payload.players.bot.deck.length },
+      });
+    } catch {}
+
+    const res = await postBotTurn(payload);
 
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
