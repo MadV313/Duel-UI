@@ -16,10 +16,13 @@ function getActionMenu() {
   menu.id = 'card-action-menu';
   menu.className = 'card-action-menu hidden';
   menu.innerHTML = `
-    <button data-action="play">Play</button>
-    <button data-action="discard">Discard</button>
+    <button data-action="play"    type="button">Play</button>
+    <button data-action="discard" type="button">Discard</button>
   `;
   document.body.appendChild(menu);
+
+  // stop clicks inside from bubbling to the document
+  menu.addEventListener('click', (e) => e.stopPropagation());
 
   // close on outside click
   document.addEventListener('click', (e) => {
@@ -35,6 +38,10 @@ function getActionMenu() {
     if (e.key === 'Escape') hideActionMenu();
   });
 
+  // auto-hide on scroll/resize to avoid floating in wrong place
+  window.addEventListener('scroll', hideActionMenu, { passive: true });
+  window.addEventListener('resize', hideActionMenu);
+
   return menu;
 }
 
@@ -43,6 +50,8 @@ function hideActionMenu() {
   if (menu) {
     menu.classList.add('hidden');
     menu.style.left = menu.style.top = '';
+    menu.removeAttribute('data-player');
+    menu.removeAttribute('data-index');
   }
   // remove any previous selected highlight
   document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
@@ -50,6 +59,7 @@ function hideActionMenu() {
 
 function showActionMenuFor(el, player, index) {
   const menu = getActionMenu();
+
   // position menu above the card, centered
   const rect = el.getBoundingClientRect();
   const top = window.scrollY + rect.top - 8; // a bit above the card
@@ -58,18 +68,23 @@ function showActionMenuFor(el, player, index) {
   menu.style.top = `${top}px`;
   menu.style.left = `${left}px`;
   menu.classList.remove('hidden');
+  menu.dataset.player = player;
+  menu.dataset.index = String(index);
 
   // mark selected
   document.querySelectorAll('.card.selected').forEach(n => n.classList.remove('selected'));
   el.classList.add('selected');
 
   // wire actions (rebind each time to use fresh indices)
-  menu.querySelector('[data-action="play"]').onclick = () => {
+  const playBtn = menu.querySelector('[data-action="play"]');
+  const discBtn = menu.querySelector('[data-action="discard"]');
+
+  playBtn.onclick = () => {
     hideActionMenu();
-    if (player !== 'player1') return; // safety: only local player hand plays from UI
+    if (player !== 'player1') return; // only local player can play from UI
     playCard(index);
   };
-  menu.querySelector('[data-action="discard"]').onclick = () => {
+  discBtn.onclick = () => {
     hideActionMenu();
     if (player !== 'player1') return;
     discardCard(index);
@@ -87,8 +102,9 @@ export function renderHand(player, isSpectator = false) {
   const handContainer = document.getElementById(`${player}-hand`);
   if (!handContainer) return;
 
-  // Clear current contents
+  // Clear current contents & any open menus/highlights
   handContainer.innerHTML = '';
+  hideActionMenu();
 
   const hand = Array.isArray(duelState?.players?.[player]?.hand)
     ? duelState.players[player].hand
@@ -96,9 +112,7 @@ export function renderHand(player, isSpectator = false) {
 
   console.log(`🖐️ Rendering hand for ${player} (${hand.length} cards)`, hand);
 
-  if (hand.length === 0) {
-    return;
-  }
+  if (hand.length === 0) return;
 
   // ✅ Hide opponent's hand unless spectator
   const hideHand = !isSpectator && player === 'player2';
