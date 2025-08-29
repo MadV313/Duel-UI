@@ -90,6 +90,49 @@ function drawFor(playerKey) {
   return true;
 }
 
+/* ---------- helpers for discard-after-use detection ---------- */
+
+function toTags(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(String);
+  return String(val)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/** Robust detector for “this card should be discarded after it resolves” */
+function shouldDiscardAfterUse(meta) {
+  if (!meta) return false;
+  const text = String(meta.effect || '').toLowerCase();
+  const tags = toTags(meta.tags).map(t => t.toLowerCase());
+  const type = String(meta.type || '').toLowerCase();
+
+  // Direct phrasing (many of your cards use this)
+  if (/(?:discard\s+(?:this\s+card\s+)?after\s+use|discard\s+after\s+use|one-?time|single-?use)/.test(text)) {
+    return true;
+  }
+  // “Play from hand” is a good proxy for instants/consumables in your list
+  if (text.includes('play from hand') && type !== 'trap') return true;
+
+  // Tags that imply consumable behavior
+  if (tags.some(t => ['consumable','instant','one_time','single_use'].includes(t))) return true;
+
+  return false;
+}
+
+function moveCardFromFieldToDiscard(player, cardObj) {
+  const idx = player.field.lastIndexOf(cardObj);
+  if (idx !== -1) {
+    player.field.splice(idx, 1);
+  } else {
+    // fallback safety
+    player.field.pop();
+  }
+  player.discardPile ||= [];
+  player.discardPile.push(cardObj);
+}
+
 /* ---------- very-lightweight effect resolver (UI side) ----------
    This lets common effects feel responsive without needing backend resolve.
    It parses friendly phrases in allCards.json "effect" text:
@@ -98,7 +141,6 @@ function drawFor(playerKey) {
      - "draw N (loot) card(s)"             → draws
      - "discard 1 card"                    → discards last from your hand
      - "skip next draw"                    → sets a flag on the player
-     - "Discard this card after use."      → move to discard immediately
    Traps are not resolved here—they remain face-down on the field.
 ----------------------------------------------------------------- */
 function resolveImmediateEffect(meta, ownerKey) {
@@ -208,14 +250,12 @@ export function playCard(cardIndex) {
   } else {
     // Non-traps: resolve immediately
     card.isFaceDown = false;
-    player.field.push(card); // temporarily place (helps visuals)
+    player.field.push(card); // keep a ref so we can remove this exact object
     resolveImmediateEffect(meta, playerKey);
 
-    // If card text says to discard after use, move it to discard now
-    if (/discard\s+this\s+card\s+after\s+use/.test(String(meta?.effect || '').toLowerCase())) {
-      player.field.pop(); // remove from field
-      player.discardPile ||= [];
-      player.discardPile.push(card);
+    // Discard-after-use detection (more robust than before)
+    if (shouldDiscardAfterUse(meta)) {
+      moveCardFromFieldToDiscard(player, card);
     }
     triggerAnimation('combo');
   }
