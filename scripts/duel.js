@@ -5,17 +5,20 @@ import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 import allCards from './allCards.js';
 
-// --- Config
+// --- Config (UI guards)
 const MAX_FIELD_SLOTS = 3;
-const MAX_HAND = 4;
+const MAX_HAND        = 4;
 
-// Helper: find card metadata by numeric id or "003" string
+/* ---------------- helpers ---------------- */
+
+function pad3(id) { return String(id).padStart(3, '0'); }
+
+// Lookup meta by numeric id or "003" string
 function findCardMeta(id) {
-  const idStr = String(id).padStart(3, '0');
-  return allCards.find(c => c.card_id === idStr);
+  return allCards.find(c => c.card_id === pad3(id));
 }
 
-// Keep buttons from being spammed during operations
+// Debounce control buttons during async / heavy ops
 function setControlsDisabled(disabled) {
   const buttons = [
     document.getElementById('startPracticeBtn'),
@@ -28,18 +31,40 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: String(cid).padStart(3, '0'), isFaceDown: Boolean(objOrId.isFaceDown) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
   }
-  return { cardId: String(objOrId).padStart(3, '0'), isFaceDown: faceDownDefault };
+  return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
+
+function ensureZones(p) {
+  p.hand        ||= [];
+  p.field       ||= [];
+  p.deck        ||= [];
+  p.discardPile ||= [];
+}
+
+/** Cheap HP adjust with clamping (0–999) */
+function changeHP(playerKey, delta) {
+  const p = duelState.players[playerKey];
+  if (!p) return;
+  const next = Math.max(0, Math.min(999, Number(p.hp ?? 0) + Number(delta)));
+  p.hp = next;
+}
+
+/* ---------- draw logic ---------- */
 
 /** Draw one card for a specific player. Returns true if a card was drawn. */
 function drawFor(playerKey) {
   const player = duelState?.players?.[playerKey];
   if (!player) return false;
+  ensureZones(player);
 
-  if (!Array.isArray(player.hand)) player.hand = [];
-  if (!Array.isArray(player.deck)) player.deck = [];
+  // Handle "skip next draw" flag (set by some card effects)
+  if (player.skipNextDraw) {
+    console.log(`[draw] ${playerKey} draw skipped due to effect.`);
+    player.skipNextDraw = false;
+    return false;
+  }
 
   if (player.hand.length >= MAX_HAND) {
     console.log(`[draw] ${playerKey} hand full (${MAX_HAND}).`);
@@ -59,6 +84,68 @@ function drawFor(playerKey) {
   return true;
 }
 
+/* ---------- very-lightweight effect resolver (UI side) ----------
+   NOTE: This is intentionally simple so we get visible outcomes
+   without depending on backend logic. It parses common phrases
+   in allCards.json "effect" text:
+     - "deal XX DMG" → damages opponent
+     - "heal XX"     → heals self
+     - "draw N card(s)" → draws
+     - "discard 1 card" → discards random/last
+     - "skip next draw" → sets a flag on the player
+     - "Discard this card after use." → moves to discard immediately
+   Traps are not resolved here—they remain face-down on the field.
+----------------------------------------------------------------- */
+function resolveImmediateEffect(meta, ownerKey) {
+  if (!meta) return;
+
+  const you   = ownerKey;
+  const foe   = ownerKey === 'player1' ? 'player2' : 'player1';
+  const text  = String(meta.effect || '').toLowerCase();
+
+  // deal X dmg (to foe)
+  const mDmg = text.match(/deal\s+(\d+)\s*dmg/);
+  if (mDmg) {
+    const dmg = Number(mDmg[1]);
+    changeHP(foe, -dmg);
+    console.log(`⚔️ ${meta.name}: dealt ${dmg} DMG to ${foe}`);
+    triggerAnimation('bullet');
+  }
+
+  // heal X
+  const mHeal = text.match(/heal\s+(\d+)/);
+  if (mHeal) {
+    const heal = Number(mHeal[1]);
+    changeHP(you, +heal);
+    console.log(`💚 ${meta.name}: healed ${you} for ${heal}`);
+    triggerAnimation('heal');
+  }
+
+  // draw N card(s)
+  const mDraw = text.match(/draw\s+(a|\d+)\s+card/);
+  if (mDraw) {
+    const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
+    for (let i = 0; i < n; i++) drawFor(you);
+  }
+
+  // discard 1 card (from your hand) — we discard the last card if any
+  if (/discard\s+1\s+card/.test(text)) {
+    const hand = duelState.players[you].hand;
+    if (hand.length) {
+      const tossed = hand.pop();
+      duelState.players[you].discardPile ||= [];
+      duelState.players[you].discardPile.push(tossed);
+      console.log(`🗑️ ${meta.name}: discarded a card from ${you}'s hand`);
+    }
+  }
+
+  // skip next draw
+  if (/skip\s+next\s+draw/.test(text)) {
+    duelState.players[you].skipNextDraw = true;
+    console.log(`⏭️ ${meta.name}: ${you} will skip their next draw`);
+  }
+}
+
 /* ---------- public actions ---------- */
 
 /** Manual Draw button */
@@ -70,8 +157,8 @@ export function drawCard() {
 /**
  * Play a card from the current player's hand to their field.
  * - Interactive plays allowed only for local human (player1)
- * - Field has 3 slots
- * - Traps stay face-down; others are face-up on play
+ * - Field has 3 slots (UI guard)
+ * - Traps stay face-down; others resolve immediately and usually go to discard
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -80,6 +167,8 @@ export function playCard(cardIndex) {
 
   // Safety: only allow interactive plays for local human
   if (playerKey !== 'player1') return;
+
+  ensureZones(player);
 
   if (!Array.isArray(player.hand) || cardIndex < 0 || cardIndex >= player.hand.length) {
     alert('Invalid card selection.');
@@ -95,20 +184,37 @@ export function playCard(cardIndex) {
   let card = player.hand.splice(cardIndex, 1)[0];
   // Normalize
   if (typeof card !== 'object' || card === null) {
-    card = { cardId: String(card).padStart(3, '0'), isFaceDown: false };
+    card = { cardId: pad3(card), isFaceDown: false };
   } else {
-    card.cardId = String(card.cardId ?? card.id ?? card.card_id ?? '000').padStart(3, '0');
+    card.cardId = pad3(card.cardId ?? card.id ?? card.card_id ?? '000');
   }
 
   // Decide face-up/face-down on play
   const meta = findCardMeta(card.cardId);
-  const isTrap = !!meta && String(meta.type || '').toLowerCase() === 'trap';
-  card.isFaceDown = isTrap ? true : false;
+  const type = String(meta?.type || '').toLowerCase();
+  const isTrap = type === 'trap';
 
-  player.field.push(card);
+  if (isTrap) {
+    // Traps are placed face-down and do not resolve immediately
+    card.isFaceDown = true;
+    player.field.push(card);
+    console.log(`🪤 Set trap: ${meta?.name ?? card.cardId} (face-down)`);
+    triggerAnimation('trap');
+  } else {
+    // Non-traps: resolve immediately
+    card.isFaceDown = false;
+    player.field.push(card); // temporarily place (helps visuals)
+    resolveImmediateEffect(meta, playerKey);
 
-  console.log(`▶️ Played: ${meta?.name ?? card.cardId} ${isTrap ? '(face-down trap)' : ''}`);
-  triggerAnimation(isTrap ? 'trap' : 'combo');
+    // If card text says to discard after use, move it to discard now
+    if (/discard\s+this\s+card\s+after\s+use/.test(String(meta?.effect || '').toLowerCase())) {
+      player.field.pop(); // remove from field
+      player.discardPile ||= [];
+      player.discardPile.push(card);
+    }
+    triggerAnimation('combo');
+  }
+
   renderDuelUI();
 }
 
@@ -120,16 +226,18 @@ export function discardCard(cardIndex) {
   // Safety: only allow interactive discards for local human
   if (playerKey !== 'player1') return;
 
+  ensureZones(player);
+
   if (cardIndex < 0 || cardIndex >= player.hand.length) {
     alert('Invalid card selection.');
     return;
   }
 
   const card = player.hand.splice(cardIndex, 1)[0];
-  if (!Array.isArray(player.discardPile)) player.discardPile = [];
   player.discardPile.push(card);
 
-  console.log(`🗑️ Discarded: ${findCardMeta(card.cardId)?.name ?? card.cardId}`);
+  const meta = findCardMeta(card.cardId);
+  console.log(`🗑️ Discarded: ${meta?.name ?? card.cardId}`);
   renderDuelUI();
 }
 
