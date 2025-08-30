@@ -13,29 +13,18 @@ const MAX_HP          = 200;
 /* ---------------- helpers ---------------- */
 
 function pad3(id) { return String(id).padStart(3, '0'); }
-
-// Lookup meta by numeric id or "003" string
-function findCardMeta(id) {
-  return allCards.find(c => c.card_id === pad3(id));
+function getMeta(id) { return allCards.find(c => c.card_id === pad3(id)); }
+function txt(s) { return String(s || '').toLowerCase(); }
+function tagset(meta) {
+  const raw = Array.isArray(meta?.tags)
+    ? meta.tags
+    : String(meta?.tags || '').split(',').map(s => s.trim()).filter(Boolean);
+  return new Set(raw.map(t => t.toLowerCase()));
 }
-function isTrapId(cardId) {
-  const t = String(findCardMeta(cardId)?.type || '').toLowerCase();
-  return t === 'trap';
-}
-function hasTag(meta, ...tags) {
-  if (!meta) return false;
-  const arr = Array.isArray(meta.tags)
-    ? meta.tags.map(t => String(t).toLowerCase().trim())
-    : String(meta.tags || '')
-        .split(',')
-        .map(t => t.toLowerCase().trim())
-        .filter(Boolean);
-  return tags.some(t => arr.includes(t));
-}
-function looksInfected(meta) {
-  if (!meta) return false;
-  if (hasTag(meta, 'infected')) return true;
-  return /infected/i.test(String(meta.name || ''));
+function hasTag(meta, t) { return tagset(meta).has(String(t).toLowerCase()); }
+function isTrapMeta(meta) {
+  const t = txt(meta?.type);
+  return t === 'trap' || hasTag(meta, 'trap');
 }
 
 // Debounce control buttons during async / heavy ops
@@ -51,7 +40,7 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
@@ -61,74 +50,106 @@ function ensureZones(p) {
   p.field       ||= [];
   p.deck        ||= [];
   p.discardPile ||= [];
+  p.buffs       ||= {}; // generic bag: { extraDrawPerTurn, blockHealTurns, skipNextTurn, skipNextDraw, nextAttackBonus, nextAttackMult, ... }
 }
 
-/** Cheap HP adjust with clamping (0–MAX_HP) */
+/** HP adjust with clamping (0–MAX_HP), obeying block-heal */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
   if (!p) return;
-  const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? MAX_HP) + Number(delta)));
+  ensureZones(p);
+
+  if (delta > 0 && p.buffs?.blockHealTurns > 0) {
+    console.log(`[heal-block] Healing prevented on ${playerKey} (${delta} HP).`);
+    return;
+  }
+  const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
 }
 
-/* ---------- draw logic ---------- */
+/* ---------- deck helpers (category draws) ---------- */
 
-/** Draw one card for a specific player. Returns true if a card was drawn. */
+function drawRaw(playerKey) {
+  const player = duelState?.players?.[playerKey];
+  if (!player) return null;
+  ensureZones(player);
+
+  if (player.hand.length >= MAX_HAND) return null;
+  if (player.deck.length === 0) return null;
+
+  const raw = player.deck.shift();
+  const entry = toEntry(raw, playerKey === 'player2'); // bot hand = face-down to user
+  player.hand.push(entry);
+  return entry;
+}
+
+/** Draw 1 card for specific player. Returns true if drawn. */
 function drawFor(playerKey) {
   const player = duelState?.players?.[playerKey];
   if (!player) return false;
   ensureZones(player);
 
-  // Handle "skip next draw" flag (set by some card effects)
-  if (player.skipNextDraw) {
-    console.log(`[draw] ${playerKey} draw skipped due to effect.`);
-    player.skipNextDraw = false;
+  // Handle "skip next draw"
+  if (player.buffs?.skipNextDraw) {
+    console.log(`[draw] ${playerKey} draw skipped.`);
+    player.buffs.skipNextDraw = false;
     return false;
   }
-
-  if (player.hand.length >= MAX_HAND) {
-    console.log(`[draw] ${playerKey} hand full (${MAX_HAND}).`);
-    return false;
-  }
-  if (player.deck.length === 0) {
-    console.log(`[draw] ${playerKey} deck empty.`);
-    return false;
-  }
-
-  const raw = player.deck.shift();
-  // Bot's hand cards should appear face-down in UI (not relevant here but consistent)
-  const entry = toEntry(raw, playerKey === 'player2');
-  player.hand.push(entry);
-
-  console.log(`[draw] ${playerKey} drew ${entry.cardId}`);
-  return true;
+  const got = drawRaw(playerKey);
+  if (got) console.log(`[draw] ${playerKey} drew ${got.cardId}`);
+  return !!got;
 }
 
-/* ---------------- discard helpers ---------------- */
+/** Draw 1 card from deck that matches predicate(meta). Falls back to normal draw if not found. */
+function drawFromDeckWhere(playerKey, predicate) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  if (P.hand.length >= MAX_HAND) return false;
+
+  const idx = P.deck.findIndex(e => {
+    const meta = getMeta(typeof e === 'object' ? e.cardId : e);
+    return predicate(meta);
+  });
+
+  if (idx >= 0) {
+    const [chosen] = P.deck.splice(idx, 1);
+    const entry = toEntry(chosen, playerKey === 'player2');
+    P.hand.push(entry);
+    console.log(`[draw+] ${playerKey} drew specific ${entry.cardId}`);
+    return true;
+  }
+  return drawFor(playerKey);
+}
+
+const isType = t => meta => txt(meta?.type) === t;
+const has = t => meta => hasTag(meta, t);
+
+/* ---------- discard helpers ---------- */
 
 /** Returns true if played card should be discarded after resolving. */
 function shouldAutoDiscard(meta) {
   if (!meta) return false;
 
-  // Tags (if you ever add them): "consumable", "one_use", "discard_after_use"
-  const tags = (Array.isArray(meta.tags) ? meta.tags : String(meta.tags || '')
-    .split(',').map(s => s.trim().toLowerCase())).filter(Boolean);
-  if (tags.includes('discard_after_use') || tags.includes('consumable') || tags.includes('one_use')) {
-    return true;
-  }
+  const T = tagset(meta);
+  if (T.has('discard_after_use') || T.has('consumable') || T.has('one_use')) return true;
 
-  // Flexible phrase match from your JSON effect strings
-  const effect = String(meta.effect || '').toLowerCase();
+  const effect = txt(meta.effect);
+  const logic  = txt(meta.logic_action);
 
-  // Common phrasing variations
-  const patterns = [
+  const phrases = [
     /discard\s+this\s+card\s+(?:after|upon)\s+use/,
     /discard\s+after\s+use/,
-    /use:\s*discard\s+this\s+card/,
     /then\s+discard\s+this\s+card/,
+    /discard\s+with\s+no\s+effect/,
   ];
-  if (patterns.some(rx => rx.test(effect))) return true;
+  if (phrases.some(rx => rx.test(effect) || rx.test(logic))) return true;
 
+  // Heuristic: many Attack/Loot/Tactical/Infected in your JSON explicitly say discard after use.
+  // We don't auto-discard Defense unless text says so.
+  const type = txt(meta.type);
+  if (type !== 'defense' && (effect.includes('discard this card') || logic.includes('discard this card'))) {
+    return true;
+  }
   return false;
 }
 
@@ -142,138 +163,334 @@ function moveFieldCardToDiscard(playerKey, cardObj) {
   }
 }
 
-/* ---- extra helpers for utilities/traps/infected (player effects) ---- */
-function discardRandomTrap(playerKey) {
+/* ---------- attack buffs ---------- */
+
+function consumeAttackBuff(playerKey, meta, baseDmg) {
   const P = duelState.players[playerKey];
   ensureZones(P);
-  const idx = P.field.findIndex(c => c && isTrapId(c.cardId));
-  if (idx !== -1) {
-    const [c] = P.field.splice(idx, 1);
-    P.discardPile.push(c);
-    return true;
+  const b = P.buffs || {};
+
+  let dmg = baseDmg;
+
+  // Restrict multipliers/bonuses by tags if provided
+  const isGun = hasTag(meta, 'gun') || txt(meta.type) === 'attack';
+  const allowed = b.attackRestrictTags; // Set(['sniper','scoped_pistol','hunting_rifle','silenced_rifle']) etc.
+  const metaTags = tagset(meta);
+
+  const tagOK = !allowed || [...allowed].some(t => metaTags.has(t));
+
+  if (b.nextAttackBonus && (!allowed || tagOK)) {
+    dmg += b.nextAttackBonus;
   }
-  return false;
+  if (b.nextAttackMult && (!allowed || tagOK)) {
+    dmg = Math.round(dmg * b.nextAttackMult);
+  }
+
+  // Consume once
+  P.buffs.nextAttackBonus = 0;
+  P.buffs.nextAttackMult  = 0;
+  P.buffs.attackRestrictTags = null;
+
+  // Generic “gun buff” from Box of Ammo
+  if (isGun && b.gunFlatBonus) {
+    dmg += b.gunFlatBonus;
+    // one-shot bonus
+    P.buffs.gunFlatBonus = 0;
+  }
+
+  return dmg;
 }
 
-function revealRandomEnemyTrap(playerKey) {
+/* ---------- textual effect resolver (UI side) ---------- */
+
+function parseNumberPairTimes(s) {
+  // "10x2" or "10 x 2" → 20
+  const m = s.match(/(\d+)\s*[x×]\s*(\d+)/i);
+  if (m) return Number(m[1]) * Number(m[2]);
+  return null;
+}
+
+function damageFoe(foe, you, meta, base) {
+  const amount = consumeAttackBuff(you, meta, base);
+  changeHP(foe, -amount);
+  console.log(`⚔️ ${meta.name}: dealt ${amount} DMG to ${foe}`);
+  triggerAnimation('bullet');
+}
+
+function discardRandomFromHand(playerKey, filterFn = null) {
   const P = duelState.players[playerKey];
   ensureZones(P);
-  const traps = P.field.filter(c => c && isTrapId(c.cardId) && c.isFaceDown);
-  if (traps.length) {
-    const chosen = traps[Math.floor(Math.random() * traps.length)];
-    chosen.isFaceDown = false;
-    return true;
-  }
-  return false;
+  const pool = P.hand
+    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) }))
+    .filter(obj => (filterFn ? filterFn(obj.m) : true));
+  if (!pool.length) return false;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const [card] = P.hand.splice(pick.i, 1);
+  P.discardPile.push(card);
+  return true;
 }
 
-function destroyEnemyInfected(foeKey) {
-  const P = duelState.players[foeKey];
+function stealOneFromHand(srcKey, dstKey, filterFn) {
+  const src = duelState.players[srcKey];
+  const dst = duelState.players[dstKey];
+  ensureZones(src); ensureZones(dst);
+
+  const pool = src.hand
+    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) }))
+    .filter(obj => filterFn(obj.m));
+
+  if (!pool.length || dst.hand.length >= MAX_HAND) return false;
+
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const [card] = src.hand.splice(pick.i, 1);
+  // Normalize visibility
+  const entry = toEntry(card, dstKey === 'player2');
+  dst.hand.push(entry);
+  console.log(`🕵️ Stole ${getMeta(entry.cardId)?.name || entry.cardId} from ${srcKey} → ${dstKey}`);
+  return true;
+}
+
+function moveOneFromDiscardToDeckTop(playerKey, filterFn) {
+  const P = duelState.players[playerKey];
   ensureZones(P);
-  const idx = P.field.findIndex(c => looksInfected(findCardMeta(c.cardId)));
-  if (idx !== -1) {
-    const [c] = P.field.splice(idx, 1);
-    P.discardPile.push(c);
-    return true;
-  }
-  return false;
+  const pool = P.discardPile
+    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) }))
+    .filter(obj => filterFn(obj.m));
+  if (!pool.length) return false;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const [card] = P.discardPile.splice(pick.i, 1);
+  P.deck.unshift(card);
+  console.log(`[recycle] returned ${getMeta(card.cardId)?.name || card.cardId} to top of deck`);
+  return true;
 }
 
-/* ---------- very-lightweight effect resolver (UI side) ----------
-   Parses common phrases in allCards.json "effect" text:
-     - "deal XX DMG"                  → damages opponent
-     - "heal XX"                      → heals self (capped to 200)
-     - "draw N card(s)/loot card(s)"  → draws
-     - "discard 1 card"               → discards from your hand (not the played card)
-     - "skip next draw"               → sets a flag on the player
-     - "destroy/remove 1 enemy field card (random)" → removes foe field card
-     - "destroy/remove infected"      → targets infected on opponent field
-     - "disarm/destroy/reveal trap"   → interacts with foe traps
------------------------------------------------------------------ */
+function drawFromDiscard(playerKey, filterFn) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  if (P.hand.length >= MAX_HAND) return false;
+
+  const pool = P.discardPile
+    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) }))
+    .filter(obj => filterFn(obj.m));
+  if (!pool.length) return false;
+
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const [card] = P.discardPile.splice(pick.i, 1);
+  P.hand.push(toEntry(card, playerKey === 'player2'));
+  console.log(`[loot-recover] drew ${getMeta(card.cardId)?.name || card.cardId} from discard`);
+  return true;
+}
+
+function trapAutoTriggersNow(meta) {
+  const s = `${txt(meta.effect)} ${txt(meta.logic_action)}`;
+  return /triggered\s+by\s+play|triggered\s+automatically|trigger\s+on\s+enemy\s+card/.test(s);
+}
+
+/**
+ * Resolve immediate effects for non-traps and for trap cards that are explicitly
+ * "Triggered by play" / "Triggered automatically" / "Trigger on enemy card".
+ */
 function resolveImmediateEffect(meta, ownerKey) {
-  if (!meta) return;
+  const you = ownerKey;
+  const foe = ownerKey === 'player1' ? 'player2' : 'player1';
+  ensureZones(duelState.players[you]);
+  ensureZones(duelState.players[foe]);
 
-  const you   = ownerKey;
-  const foe   = ownerKey === 'player1' ? 'player2' : 'player1';
-  const text  = String(meta.effect || '').toLowerCase();
+  const etext = `${txt(meta.effect)} ${txt(meta.logic_action)}`;
+  const type  = txt(meta.type);
 
-  // deal X dmg (to foe)
-  const mDmg = text.match(/deal\s+(\d+)\s*dmg/);
-  if (mDmg) {
-    const dmg = Number(mDmg[1]);
-    changeHP(foe, -dmg);
-    console.log(`⚔️ ${meta.name}: dealt ${dmg} DMG to ${foe}`);
-    triggerAnimation('bullet');
+  // ---------- DAMAGE ----------
+  // 10x2 style
+  const pair = parseNumberPairTimes(etext);
+  if (pair) {
+    damageFoe(foe, you, meta, pair);
+  } else {
+    // deal X DMG
+    const mD = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
+    if (mD) damageFoe(foe, you, meta, Number(mD[1]));
   }
 
-  // heal X
-  const mHeal = text.match(/heal\s+(\d+)/);
+  // to both players (aoe)
+  if (/to\s+both\s+players/.test(etext)) {
+    const mBoth = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
+    const dmg = mBoth ? Number(mBoth[1]) : 0;
+    if (dmg > 0) {
+      changeHP(you, -dmg);
+      changeHP(foe, -dmg);
+      triggerAnimation('explosion');
+    }
+  }
+
+  // over N turns (basic dot → immediate approximation  value*N/turns kept simple)
+  const dot = etext.match(/(\d+)\s*dmg\s+over\s+(\d+)\s*turn/);
+  if (dot) {
+    const per = Number(dot[1]);
+    const turns = Number(dot[2]);
+    // apply now as a simple approximation
+    changeHP(foe, -per);
+    // store a lightweight dot (optional)
+    duelState.players[foe].buffs.dot = { amount: per, turns };
+  }
+
+  // ---------- HEAL ----------
+  // Restore / Heal X
+  const mHeal = etext.match(/(restore|heal)\s+(\d+)\s*hp/);
   if (mHeal) {
-    const heal = Number(mHeal[1]);
-    changeHP(you, +heal);
-    console.log(`💚 ${meta.name}: healed ${you} for ${heal}`);
+    changeHP(you, Number(mHeal[2]));
     triggerAnimation('heal');
   }
 
-  // draw N card(s) / loot cards
-  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:loot\s+)?card/);
+  // ---------- DRAWS ----------
+  // draw a / draw N card(s)
+  const mDraw = etext.match(/draw\s+(a|\d+)\s+card/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // discard 1 card (from your hand) — we discard the last card if any
-  if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
-    const hand = duelState.players[you].hand;
-    if (hand.length) {
-      const tossed = hand.pop();
-      duelState.players[you].discardPile ||= [];
-      duelState.players[you].discardPile.push(tossed);
-      console.log(`🗑️ ${meta.name}: discarded a card from ${you}'s hand`);
-    }
+  // category draws
+  if (/draw\s+1\s+trap\s+card/.test(etext))       drawFromDeckWhere(you, isType('trap') || has('trap'));
+  if (/draw\s+1\s+defense\s+card/.test(etext))    drawFromDeckWhere(you, isType('defense'));
+  if (/draw\s+1\s+tactical\s+card/.test(etext))   drawFromDeckWhere(you, isType('tactical'));
+  if (/draw\s+1\s+loot\s+card/.test(etext))       drawFromDeckWhere(you, isType('loot'));
+  if (/draw\s+1\s+attack\s+card/.test(etext))     drawFromDeckWhere(you, isType('attack'));
+  if (/draw\s+1\s+random\s+loot\s+card/.test(etext)) drawFromDeckWhere(you, isType('loot'));
+  if (hasTag(meta, 'defense_draw')) drawFromDeckWhere(you, isType('defense'));
+
+  // ---------- DISCARD / STEAL ----------
+  if (/discard\s+1\s+card(?!\s+after)/.test(etext)) {
+    discardRandomFromHand(you);
+  }
+  if (/force\s+opponent\s+to\s+discard\s+1\s+attack\s+card/.test(etext)) {
+    discardRandomFromHand(foe, m => txt(m.type) === 'attack');
+  }
+  if (/steal\s+1\s+loot\s+card/.test(etext)) {
+    stealOneFromHand(foe, you, m => txt(m.type) === 'loot');
   }
 
-  // skip next draw
-  if (/skip\s+next\s+draw/.test(text)) {
-    duelState.players[you].skipNextDraw = true;
-    console.log(`⏭️ ${meta.name}: ${you} will skip their next draw`);
+  // ---------- SKIPS ----------
+  if (/skip\s+next\s+draw/.test(etext)) {
+    duelState.players[you].buffs.skipNextDraw = true;
+  }
+  if (/skip\s+your\s+next\s+turn|you\s+skip\s+your\s+next\s+turn/.test(etext)) {
+    duelState.players[you].buffs.skipNextTurn = true;
+  }
+  if (/skip\s+their\s+next\s+turn|opponent\s+skips\s+next\s+turn/.test(etext)) {
+    duelState.players[foe].buffs.skipNextTurn = true;
   }
 
-  // destroy/remove 1 enemy field card (supports "random")
-  if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
+  // ---------- HEAL BLOCK ----------
+  const blockHeal = etext.match(/block\s+healing\s+for\s+(\d+)\s*turn/);
+  if (blockHeal) duelState.players[foe].buffs.blockHealTurns = Number(blockHeal[1]);
+
+  // ---------- DEFENSE / FIELD INTERACTIONS ----------
+  if (/destroy\s+1\s+enemy\s+card|destroy\s+1\s+enemy\s+field\s+card|remove\s+1\s+enemy\s+field\s+card/.test(etext)) {
     const foeField = duelState.players[foe].field || [];
     if (foeField.length) {
-      const idx = /random/.test(text) ? Math.floor(Math.random() * foeField.length) : 0;
-      const [destroyed] = foeField.splice(idx, 1);
-      duelState.players[foe].discardPile ||= [];
+      const i = /random/.test(etext) ? Math.floor(Math.random() * foeField.length) : 0;
+      const [destroyed] = foeField.splice(i, 1);
       duelState.players[foe].discardPile.push(destroyed);
-      console.log(`💥 ${meta.name}: destroyed one of ${foe}'s field cards`);
       triggerAnimation('explosion');
     }
   }
-
-  // explicitly target infected on the enemy field
-  if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(text)) {
-    if (destroyEnemyInfected(foe)) {
-      console.log(`🧟 ${meta.name}: removed an infected from ${foe}'s field`);
-      triggerAnimation('explosion');
+  if (/steal[s]?\s+1\s+defense\s+card/.test(etext)) {
+    // steal from foe hand first, otherwise from field
+    if (!stealOneFromHand(foe, you, m => txt(m.type) === 'defense')) {
+      const f = duelState.players[foe].field || [];
+      const idx = f.findIndex(e => txt(getMeta(e.cardId)?.type) === 'defense');
+      if (idx >= 0 && duelState.players[you].hand.length < MAX_HAND) {
+        const [c] = f.splice(idx, 1);
+        duelState.players[you].hand.push(toEntry(c, you === 'player2'));
+      }
     }
   }
 
-  // disarm/destroy foe trap
-  if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) {
-    if (discardRandomTrap(foe)) {
-      console.log(`🪤 ${meta.name}: disarmed a trap on ${foe}'s field`);
-      triggerAnimation('explosion');
+  // ---------- BUFFS FOR NEXT ATTACK ----------
+  if (hasTag(meta, 'ammo_buff') || /buff.*next.*gun.*\+?10/.test(etext)) {
+    duelState.players[you].buffs.gunFlatBonus = 10;
+  }
+  if (/double\s+the\s+damage\s+of\s+your\s+next\s+(sniper|scoped_pistol|hunting_rifle|silenced_rifle)/.test(etext)) {
+    duelState.players[you].buffs.nextAttackMult = 2;
+    duelState.players[you].buffs.attackRestrictTags = new Set(['sniper','scoped_pistol','hunting_rifle','silenced_rifle']);
+  }
+  if (/next\s+attack.*double\s+damage/.test(etext)) {
+    duelState.players[you].buffs.nextAttackMult = 2;
+    duelState.players[you].buffs.attackRestrictTags = null; // any attack
+  }
+
+  // ---------- SPECIAL LOOT EFFECTS ----------
+  if (/select\s+1\s+loot\s+card.*destroy.*heal\s+15/.test(etext)) {
+    // Cooking Pot: destroy one loot in hand to heal 15
+    const P = duelState.players[you];
+    const idx = P.hand.findIndex(e => txt(getMeta(e.cardId)?.type) === 'loot');
+    if (idx >= 0) {
+      const [c] = P.hand.splice(idx, 1);
+      P.discardPile.push(c);
+      changeHP(you, +15);
+    }
+  }
+  if (/return.*gun.*discard.*draw\s+pile|refresh.*weapon.*discard/.test(etext)) {
+    // Gun/Weapon Cleaning Kit
+    moveOneFromDiscardToDeckTop(you, m => hasTag(m, 'gun') || txt(m.type) === 'attack');
+  }
+  if (/recharge.*tactical.*discard/.test(etext)) {
+    moveOneFromDiscardToDeckTop(you, m => txt(m.type) === 'tactical');
+  }
+  if (/draw\s+1\s+random\s+loot\s+card\s+from\s+your\s+discard/.test(etext)) {
+    drawFromDiscard(you, m => txt(m.type) === 'loot');
+  }
+
+  // ---------- INFECTED-SPECIFIC ----------
+  if (type === 'infected') {
+    if (/deal[s]?\s+(\d+)\s*dmg/.test(etext)) {
+      const dm = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
+      damageFoe(foe, you, meta, Number(dm[1]));
+    }
+    if (/drain|siphon/.test(etext) || /you\s+lose\s+(\d+)\s*hp.*enemy\s+gains\s+(\d+)/.test(etext)) {
+      changeHP(you, -10); changeHP(foe, +5);
+    }
+    if (/lose\s+next\s+draw|draw\s+phase/.test(etext)) {
+      duelState.players[foe].buffs.skipNextDraw = true;
+    }
+    if (/skip\s+their\s+next\s+turn|cannot\s+play.*next\s+round|hand\s+lock/.test(etext)) {
+      duelState.players[foe].buffs.skipNextTurn = true;
+    }
+    if (/spawn.*another.*infected|backup/.test(etext)) {
+      // Try hand → deck → discard
+      const trySpawn = (from, takeFn) => {
+        const pool = from
+          .map((e,i)=>({e,i,m:getMeta(typeof e==='object'?e.cardId:e)}))
+          .filter(o=>txt(o.m.type)==='infected');
+        if (!pool.length) return false;
+        const pick = pool[Math.floor(Math.random()*pool.length)];
+        const card = takeFn(pick.i);
+        // resolve spawned infected immediately
+        resolveImmediateEffect(getMeta(card.cardId), you);
+        return true;
+      };
+      const P = duelState.players[you];
+      if (!trySpawn(P.hand, i=>P.hand.splice(i,1)[0])) {
+        if (!trySpawn(P.deck, i=>P.deck.splice(i,1)[0])) {
+          trySpawn(P.discardPile, i=>P.discardPile.splice(i,1)[0]);
+        }
+      }
+    }
+    if (/destroy.*(gear|armor).*card/.test(etext)) {
+      const foeField = duelState.players[foe].field || [];
+      const idx = foeField.findIndex(e => txt(getMeta(e.cardId)?.type) === 'defense');
+      if (idx >= 0) {
+        const [x] = foeField.splice(idx, 1);
+        duelState.players[foe].discardPile.push(x);
+        triggerAnimation('explosion');
+      }
     }
   }
 
-  // reveal foe trap
-  if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
-    if (revealRandomEnemyTrap(foe)) {
-      console.log(`👀 ${meta.name}: revealed a trap on ${foe}'s field`);
-      triggerAnimation('combo');
-    }
+  // ---------- TRAPS that auto-trigger on play ----------
+  if (isTrapMeta(meta) && trapAutoTriggersNow(meta)) {
+    // Use the same parsed effects above; we already applied them.
+    // Mark for discard after activation.
+    duelState.players[you].buffs._forceDiscardPlayedTrap = true;
   }
 }
 
@@ -320,27 +537,34 @@ export function playCard(cardIndex) {
     card.cardId = pad3(card.cardId ?? card.id ?? card.card_id ?? '000');
   }
 
-  // Decide face-up/face-down on play
-  const meta = findCardMeta(card.cardId);
-  const type = String(meta?.type || '').toLowerCase();
-  const trap = type === 'trap';
+  const meta = getMeta(card.cardId);
+  const isTrap = isTrapMeta(meta);
 
-  if (trap) {
-    // Traps are placed face-down and do not resolve immediately
-    card.isFaceDown = true;
-    player.field.push(card);
+  // Place on field (traps face-down, others face-up for a moment)
+  card.isFaceDown = isTrap ? true : false;
+  player.field.push(card);
+
+  if (isTrap) {
     console.log(`🪤 Set trap: ${meta?.name ?? card.cardId} (face-down)`);
     triggerAnimation('trap');
+
+    // Auto-trigger-on-play traps fire now and then discard.
+    if (trapAutoTriggersNow(meta)) {
+      resolveImmediateEffect(meta, playerKey);
+      // If resolver flagged for discard, move it now.
+      if (player.buffs._forceDiscardPlayedTrap) {
+        player.buffs._forceDiscardPlayedTrap = false;
+        moveFieldCardToDiscard(playerKey, card);
+      }
+    }
     renderDuelUI();
     return;
   }
 
-  // Non-traps: resolve immediately
-  card.isFaceDown = false;
-  player.field.push(card); // drop briefly for visuals
+  // Non-traps resolve immediately
   resolveImmediateEffect(meta, playerKey);
 
-  // Auto-discard the played card if effect / tags say so
+  // Auto-discard if the text/tags say so
   if (shouldAutoDiscard(meta)) {
     moveFieldCardToDiscard(playerKey, card);
   }
@@ -367,14 +591,14 @@ export function discardCard(cardIndex) {
   const card = player.hand.splice(cardIndex, 1)[0];
   player.discardPile.push(card);
 
-  const meta = findCardMeta(card.cardId);
+  const meta = getMeta(card.cardId);
   console.log(`🗑️ Discarded: ${meta?.name ?? card.cardId}`);
   renderDuelUI();
 }
 
 /**
  * End your turn.
- * Swap players → auto-draw for the NEW player → start-turn buffs → render.
+ * Swap players → auto-draw for the NEW player (+ per-turn bonuses) → start-turn buffs → render.
  * (If it's the bot's turn, renderDuelUI will handle calling the backend.)
  */
 export async function endTurn() {
@@ -385,11 +609,37 @@ export async function endTurn() {
     duelState.currentPlayer =
       duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
 
-    // Auto-draw for whoever just became active
-    drawFor(duelState.currentPlayer);
+    const active = duelState.currentPlayer;
+    const A = duelState.players[active];
+    ensureZones(A);
 
-    // Apply start-of-turn effects and render
+    // Skip entire turn if flagged
+    if (A.buffs.skipNextTurn) {
+      console.log(`[turn] ${active} turn skipped.`);
+      A.buffs.skipNextTurn = false;
+
+      // Still tick turn-based buffs, then immediately pass to the other player
+      applyStartTurnBuffs();
+      // Swap back
+      duelState.currentPlayer = active === 'player1' ? 'player2' : 'player1';
+      triggerAnimation('turn');
+      renderDuelUI();
+      return;
+    }
+
+    // Auto-draw for whoever just became active
+    drawFor(active);
+
+    // Extra draws from per-turn buffs (e.g., backpacks/vests)
+    const extra = Number(A.buffs.extraDrawPerTurn || 0);
+    for (let i = 0; i < extra; i++) drawFor(active);
+
+    // Decrement limited-turn buffs
+    if (A.buffs.blockHealTurns > 0) A.buffs.blockHealTurns--;
+
+    // Apply other start-of-turn effects
     applyStartTurnBuffs();
+
     triggerAnimation('turn');
     renderDuelUI(); // bot turn will be kicked from renderDuelUI
   } finally {
