@@ -13,20 +13,27 @@ let coinFlipInProgress = false;
  * Resolves AFTER the announcement/toast is hidden so callers can await it
  * to sequence "flip → toast → reveal UI/cards".
  *
+ * IMPORTANT:
+ *  - This function no longer forces a full UI render by default. That prevents
+ *    the board from appearing before the flip finishes. If you really want the
+ *    render to happen here, pass { renderAfter: true }.
+ *
  * @param {'player1'|'player2'|null} forceWinner  Optional winner override (e.g., from backend)
  * @param {Object} opts
  * @param {boolean} [opts.animate=true]   Show overlay + gif
- * @param {number}  [opts.duration=2600]  Total animation duration in ms (slowed down)
+ * @param {number}  [opts.duration=2600]  Total animation duration in ms
  * @param {boolean} [opts.announce=true]  Show announcement text
  * @param {number}  [opts.revealAt]       Milliseconds into the animation to reveal winner
+ * @param {boolean} [opts.renderAfter=false] Call renderDuelUI at the end (default false)
  * @returns {Promise<'player1'|'player2'>} resolves with winner after animation ends
  */
 export function flipCoin(forceWinner = null, opts = {}) {
   const {
     animate = true,
-    duration = 2600,     // slower default so it doesn’t look glitched
+    duration = 2600,
     announce = true,
-    revealAt,            // optional custom reveal timing
+    revealAt,
+    renderAfter = false, // ⬅️ default false so loadPracticeDuel controls when to reveal
   } = opts;
 
   // If a flip is already running, don't start another; just resolve to current.
@@ -74,11 +81,12 @@ export function flipCoin(forceWinner = null, opts = {}) {
     turnEl.style.display = 'none';
   }
 
-  // If not animating, reveal immediately and render, but still return a Promise for consistency
+  // If not animating, reveal immediately and (optionally) render, but still return a Promise
   if (!animate) {
-    showTurnBanner();
-    renderDuelUI();
-    coinFlipInProgress = false;
+    try { showTurnBanner(); } finally {
+      if (renderAfter) renderDuelUI();
+      coinFlipInProgress = false;
+    }
     return Promise.resolve(decided);
   }
 
@@ -101,11 +109,11 @@ export function flipCoin(forceWinner = null, opts = {}) {
       showTurnBanner();
     }, revealMs);
 
-    // Stage 3: wrap up and render, then resolve AFTER toast hides
+    // Stage 3: wrap up and (optionally) render, then resolve AFTER toast hides
     setTimeout(() => {
       if (overlay) overlay.classList.add('hidden');
       if (gif) gif.style.display = 'none';
-      renderDuelUI();
+      if (renderAfter) renderDuelUI();
       coinFlipInProgress = false;
       resolve(decided);
     }, safeDuration);
