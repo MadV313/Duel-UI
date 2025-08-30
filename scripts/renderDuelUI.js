@@ -22,37 +22,50 @@ function getMeta(cardId) {
   const id = pad3(cardId);
   return allCards.find(c => c.card_id === id);
 }
-function isTrap(cardId) {
-  const t = String(getMeta(cardId)?.type || '').toLowerCase();
-  return t === 'trap';
-}
-function hasTag(meta, ...tags) {
-  if (!meta) return false;
-  const arr = Array.isArray(meta.tags)
+
+function tagsOf(meta) {
+  if (!meta) return [];
+  return Array.isArray(meta.tags)
     ? meta.tags.map(t => String(t).toLowerCase().trim())
     : String(meta.tags || '')
         .split(',')
         .map(t => t.toLowerCase().trim())
         .filter(Boolean);
-  return tags.some(t => arr.includes(t));
 }
+
+function hasTag(meta, ...tags) {
+  if (!meta) return false;
+  const set = new Set(tagsOf(meta));
+  return tags.some(t => set.has(String(t).toLowerCase()));
+}
+
+function isTrap(cardId) {
+  const m = getMeta(cardId);
+  const t = String(m?.type || '').toLowerCase();
+  // treat traps as type "trap" OR tag includes "trap"
+  return t === 'trap' || hasTag(m, 'trap');
+}
+
 function looksInfected(meta) {
   if (!meta) return false;
   if (hasTag(meta, 'infected')) return true;
   return /infected/i.test(String(meta.name || ''));
 }
+
 function ensureArrays(p) {
   p.hand ||= [];
   p.field ||= [];
   p.deck ||= [];
   p.discardPile ||= [];
 }
+
 function changeHP(playerKey, delta) {
   const p = duelState?.players?.[playerKey];
   if (!p) return;
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? MAX_HP) + Number(delta)));
   p.hp = next;
 }
+
 function drawFor(playerKey) {
   const P = duelState?.players?.[playerKey];
   if (!P) return false;
@@ -65,23 +78,44 @@ function drawFor(playerKey) {
   return true;
 }
 
+/* ------ category draw (needed for bot “draw 1 loot/defense…” cards) ------ */
+function drawFromDeckWhere(playerKey, predicate) {
+  const P = duelState.players[playerKey];
+  ensureArrays(P);
+  if (P.hand.length >= MAX_HAND) return false;
+
+  const idx = P.deck.findIndex(e => {
+    const meta = getMeta(typeof e === 'object' ? e.cardId : e);
+    return predicate(meta);
+  });
+
+  if (idx >= 0) {
+    const [chosen] = P.deck.splice(idx, 1);
+    P.hand.push(toEntry(chosen, playerKey === 'player2'));
+    return true;
+  }
+  return drawFor(playerKey);
+}
+
+const isType = t => meta => String(meta?.type || '').toLowerCase() === t;
+const hasTagP = t => meta => hasTag(meta, t);
+
 /* ---------------- discard / resolve helpers ---------------- */
 function shouldAutoDiscard(meta) {
   if (!meta) return false;
 
-  const tags = (Array.isArray(meta.tags) ? meta.tags
-              : String(meta.tags || '').split(',').map(s => s.trim().toLowerCase())).filter(Boolean);
-
+  const tags = tagsOf(meta);
   if (tags.includes('discard_after_use') || tags.includes('consumable') || tags.includes('one_use')) return true;
 
   const effect = String(meta.effect || '').toLowerCase();
+  const logic  = String(meta.logic_action || '').toLowerCase();
   const patterns = [
     /discard\s+this\s+card\s+(?:after|upon)\s+use/,
     /discard\s+after\s+use/,
     /use:\s*discard\s+this\s+card/,
     /then\s+discard\s+this\s+card/
   ];
-  return patterns.some(rx => rx.test(effect));
+  return patterns.some(rx => rx.test(effect) || rx.test(logic));
 }
 
 function moveFieldCardToDiscard(playerKey, cardObj) {
@@ -97,9 +131,9 @@ function moveFieldCardToDiscard(playerKey, cardObj) {
 function discardRandomTrap(playerKey) {
   const P = duelState.players[playerKey];
   ensureArrays(P);
-  const idx = P.field.findIndex(c => c && isTrap(c.cardId));
-  if (idx !== -1) {
-    const [c] = P.field.splice(idx, 1);
+  const i = P.field.findIndex(c => c && isTrap(c.cardId));
+  if (i !== -1) {
+    const [c] = P.field.splice(i, 1);
     P.discardPile.push(c);
     return true;
   }
@@ -121,16 +155,22 @@ function revealRandomEnemyTrap(playerKey) {
 function destroyEnemyInfected(foeKey) {
   const P = duelState.players[foeKey];
   ensureArrays(P);
-  const idx = P.field.findIndex(c => {
-    const m = getMeta(c.cardId);
-    return looksInfected(m);
-  });
+  const idx = P.field.findIndex(c => looksInfected(getMeta(c.cardId)));
   if (idx !== -1) {
     const [c] = P.field.splice(idx, 1);
     P.discardPile.push(c);
     return true;
   }
   return false;
+}
+
+/* --------- utility: parse 10x2 style damage or normal “deal X DMG” --------- */
+function damageFromText(effectText) {
+  const s = String(effectText || '').toLowerCase();
+  const mult = s.match(/(\d+)\s*[x×]\s*(\d+)/);
+  if (mult) return Number(mult[1]) * Number(mult[2]);
+  const m = s.match(/deal[s]?\s+(\d+)\s*dmg/);
+  return m ? Number(m[1]) : 0;
 }
 
 /* -------------- UI-side effect resolver (bot) -------------- */
@@ -143,24 +183,29 @@ function resolveImmediateEffect(meta, ownerKey) {
 
   const you = ownerKey;                        // 'player2'
   const foe = ownerKey === 'player1' ? 'player2' : 'player1'; // -> 'player1'
-  const text = String(meta.effect || '').toLowerCase();
+  const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
 
-  // --- damage
-  const mDmg = text.match(/deal\s+(\d+)\s*dmg/);
-  if (mDmg) changeHP(foe, -Number(mDmg[1]));
+  // --- damage (supports "10x2" and "deal/deals X DMG")
+  const dmg = damageFromText(text);
+  if (dmg > 0) changeHP(foe, -dmg);
 
-  // --- heal
-  const mHeal = text.match(/heal\s+(\d+)/);
+  // --- heal (restore/heal X hp)
+  const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) changeHP(you, +Number(mHeal[1]));
 
-  // --- draws (supports "draw 1 card", "draw a card", "draw 1 loot card", "draw 2 loot cards")
-  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:loot\s+)?card/);
+  // --- draws (supports categories)
+  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:card|cards)/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
+  if (/draw\s+1\s+loot\s+card/.test(text))     drawFromDeckWhere(you, isType('loot'));
+  if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
+  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, isType('trap') || hasTagP('trap'));
+  if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
+  if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
 
-  // --- discard 1 card from owner's hand (not the "discard this card after use" clause)
+  // --- discard 1 card from owner's hand (not the "discard after use" clause)
   if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
     const hand = duelState.players[you].hand;
     if (hand.length) {
