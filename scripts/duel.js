@@ -8,6 +8,7 @@ import allCards from './allCards.js';
 // --- Config (UI guards)
 const MAX_FIELD_SLOTS = 3;
 const MAX_HAND        = 4;
+const MAX_HP          = 200;
 
 /* ---------------- helpers ---------------- */
 
@@ -16,6 +17,25 @@ function pad3(id) { return String(id).padStart(3, '0'); }
 // Lookup meta by numeric id or "003" string
 function findCardMeta(id) {
   return allCards.find(c => c.card_id === pad3(id));
+}
+function isTrapId(cardId) {
+  const t = String(findCardMeta(cardId)?.type || '').toLowerCase();
+  return t === 'trap';
+}
+function hasTag(meta, ...tags) {
+  if (!meta) return false;
+  const arr = Array.isArray(meta.tags)
+    ? meta.tags.map(t => String(t).toLowerCase().trim())
+    : String(meta.tags || '')
+        .split(',')
+        .map(t => t.toLowerCase().trim())
+        .filter(Boolean);
+  return tags.some(t => arr.includes(t));
+}
+function looksInfected(meta) {
+  if (!meta) return false;
+  if (hasTag(meta, 'infected')) return true;
+  return /infected/i.test(String(meta.name || ''));
 }
 
 // Debounce control buttons during async / heavy ops
@@ -31,7 +51,7 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
@@ -43,11 +63,11 @@ function ensureZones(p) {
   p.discardPile ||= [];
 }
 
-/** Cheap HP adjust with clamping (0–999) */
+/** Cheap HP adjust with clamping (0–MAX_HP) */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
   if (!p) return;
-  const next = Math.max(0, Math.min(999, Number(p.hp ?? 0) + Number(delta)));
+  const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? MAX_HP) + Number(delta)));
   p.hp = next;
 }
 
@@ -76,7 +96,7 @@ function drawFor(playerKey) {
   }
 
   const raw = player.deck.shift();
-  // Bot's hand cards should appear face-down in UI
+  // Bot's hand cards should appear face-down in UI (not relevant here but consistent)
   const entry = toEntry(raw, playerKey === 'player2');
   player.hand.push(entry);
 
@@ -109,10 +129,6 @@ function shouldAutoDiscard(meta) {
   ];
   if (patterns.some(rx => rx.test(effect))) return true;
 
-  // Heuristic: a lot of pure "attack" cards are one-shot. If you want that,
-  // uncomment the next line; otherwise we leave them unless text says so.
-  // if (String(meta.type || '').toLowerCase() === 'attack') return true;
-
   return false;
 }
 
@@ -126,16 +142,53 @@ function moveFieldCardToDiscard(playerKey, cardObj) {
   }
 }
 
+/* ---- extra helpers for utilities/traps/infected (player effects) ---- */
+function discardRandomTrap(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  const idx = P.field.findIndex(c => c && isTrapId(c.cardId));
+  if (idx !== -1) {
+    const [c] = P.field.splice(idx, 1);
+    P.discardPile.push(c);
+    return true;
+  }
+  return false;
+}
+
+function revealRandomEnemyTrap(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  const traps = P.field.filter(c => c && isTrapId(c.cardId) && c.isFaceDown);
+  if (traps.length) {
+    const chosen = traps[Math.floor(Math.random() * traps.length)];
+    chosen.isFaceDown = false;
+    return true;
+  }
+  return false;
+}
+
+function destroyEnemyInfected(foeKey) {
+  const P = duelState.players[foeKey];
+  ensureZones(P);
+  const idx = P.field.findIndex(c => looksInfected(findCardMeta(c.cardId)));
+  if (idx !== -1) {
+    const [c] = P.field.splice(idx, 1);
+    P.discardPile.push(c);
+    return true;
+  }
+  return false;
+}
+
 /* ---------- very-lightweight effect resolver (UI side) ----------
-   NOTE: This is intentionally simple so we get visible outcomes
-   without depending on backend logic. It parses common phrases
-   in allCards.json "effect" text:
-     - "deal XX DMG" → damages opponent
-     - "heal XX"     → heals self
-     - "draw N card(s)" → draws
-     - "discard 1 card" → discards from your hand
-     - "skip next draw" → sets a flag on the player
-     - "destroy 1 enemy field card" → removes a foe field card (first or random)
+   Parses common phrases in allCards.json "effect" text:
+     - "deal XX DMG"                  → damages opponent
+     - "heal XX"                      → heals self (capped to 200)
+     - "draw N card(s)/loot card(s)"  → draws
+     - "discard 1 card"               → discards from your hand (not the played card)
+     - "skip next draw"               → sets a flag on the player
+     - "destroy/remove 1 enemy field card (random)" → removes foe field card
+     - "destroy/remove infected"      → targets infected on opponent field
+     - "disarm/destroy/reveal trap"   → interacts with foe traps
 ----------------------------------------------------------------- */
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
@@ -162,15 +215,15 @@ function resolveImmediateEffect(meta, ownerKey) {
     triggerAnimation('heal');
   }
 
-  // draw N card(s)
-  const mDraw = text.match(/draw\s+(a|\d+)\s+card/);
+  // draw N card(s) / loot cards
+  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:loot\s+)?card/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
   // discard 1 card (from your hand) — we discard the last card if any
-  if (/discard\s+1\s+card(?!\s+after\s+use)/.test(text)) {
+  if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
     const hand = duelState.players[you].hand;
     if (hand.length) {
       const tossed = hand.pop();
@@ -186,17 +239,40 @@ function resolveImmediateEffect(meta, ownerKey) {
     console.log(`⏭️ ${meta.name}: ${you} will skip their next draw`);
   }
 
-  // destroy 1 enemy field card (generic)
-  if (/destroy\s+1\s+enemy\s+field\s+card/.test(text) || /remove\s+1\s+enemy\s+field\s+card/.test(text)) {
+  // destroy/remove 1 enemy field card (supports "random")
+  if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
     const foeField = duelState.players[foe].field || [];
     if (foeField.length) {
-      // random if the text says random, else take the first
       const idx = /random/.test(text) ? Math.floor(Math.random() * foeField.length) : 0;
       const [destroyed] = foeField.splice(idx, 1);
       duelState.players[foe].discardPile ||= [];
       duelState.players[foe].discardPile.push(destroyed);
       console.log(`💥 ${meta.name}: destroyed one of ${foe}'s field cards`);
       triggerAnimation('explosion');
+    }
+  }
+
+  // explicitly target infected on the enemy field
+  if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(text)) {
+    if (destroyEnemyInfected(foe)) {
+      console.log(`🧟 ${meta.name}: removed an infected from ${foe}'s field`);
+      triggerAnimation('explosion');
+    }
+  }
+
+  // disarm/destroy foe trap
+  if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) {
+    if (discardRandomTrap(foe)) {
+      console.log(`🪤 ${meta.name}: disarmed a trap on ${foe}'s field`);
+      triggerAnimation('explosion');
+    }
+  }
+
+  // reveal foe trap
+  if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
+    if (revealRandomEnemyTrap(foe)) {
+      console.log(`👀 ${meta.name}: revealed a trap on ${foe}'s field`);
+      triggerAnimation('combo');
     }
   }
 }
@@ -247,9 +323,9 @@ export function playCard(cardIndex) {
   // Decide face-up/face-down on play
   const meta = findCardMeta(card.cardId);
   const type = String(meta?.type || '').toLowerCase();
-  const isTrap = type === 'trap';
+  const trap = type === 'trap';
 
-  if (isTrap) {
+  if (trap) {
     // Traps are placed face-down and do not resolve immediately
     card.isFaceDown = true;
     player.field.push(card);
