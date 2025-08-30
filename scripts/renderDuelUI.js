@@ -13,15 +13,213 @@ let botTurnInFlight = false;
 // UI-enforced limits (keeps display sane even if backend misbehaves)
 const MAX_FIELD_SLOTS = 3;
 const MAX_HP = 200;
+const MAX_HAND = 4;
 
 /* ------------------ small helpers ------------------ */
+function pad3(id) { return String(id).padStart(3, '0'); }
+
 function getMeta(cardId) {
-  const id = String(cardId).padStart(3, '0');
+  const id = pad3(cardId);
   return allCards.find(c => c.card_id === id);
 }
 function isTrap(cardId) {
   const t = String(getMeta(cardId)?.type || '').toLowerCase();
   return t === 'trap';
+}
+function hasTag(meta, ...tags) {
+  if (!meta) return false;
+  const arr = Array.isArray(meta.tags)
+    ? meta.tags.map(t => String(t).toLowerCase().trim())
+    : String(meta.tags || '')
+        .split(',')
+        .map(t => t.toLowerCase().trim())
+        .filter(Boolean);
+  return tags.some(t => arr.includes(t));
+}
+function looksInfected(meta) {
+  if (!meta) return false;
+  if (hasTag(meta, 'infected')) return true;
+  return /infected/i.test(String(meta.name || ''));
+}
+function ensureArrays(p) {
+  p.hand ||= [];
+  p.field ||= [];
+  p.deck ||= [];
+  p.discardPile ||= [];
+}
+function changeHP(playerKey, delta) {
+  const p = duelState?.players?.[playerKey];
+  if (!p) return;
+  const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? MAX_HP) + Number(delta)));
+  p.hp = next;
+}
+function drawFor(playerKey) {
+  const P = duelState?.players?.[playerKey];
+  if (!P) return false;
+  ensureArrays(P);
+  if (P.hand.length >= MAX_HAND) return false;
+  if (P.deck.length === 0) return false;
+  const top = P.deck.shift();
+  const entry = toEntry(top, playerKey === 'player2'); // bot hand is face-down visually
+  P.hand.push(entry);
+  return true;
+}
+
+/* ---------------- discard / resolve helpers ---------------- */
+function shouldAutoDiscard(meta) {
+  if (!meta) return false;
+
+  const tags = (Array.isArray(meta.tags) ? meta.tags
+              : String(meta.tags || '').split(',').map(s => s.trim().toLowerCase())).filter(Boolean);
+
+  if (tags.includes('discard_after_use') || tags.includes('consumable') || tags.includes('one_use')) return true;
+
+  const effect = String(meta.effect || '').toLowerCase();
+  const patterns = [
+    /discard\s+this\s+card\s+(?:after|upon)\s+use/,
+    /discard\s+after\s+use/,
+    /use:\s*discard\s+this\s+card/,
+    /then\s+discard\s+this\s+card/
+  ];
+  return patterns.some(rx => rx.test(effect));
+}
+
+function moveFieldCardToDiscard(playerKey, cardObj) {
+  const P = duelState.players[playerKey];
+  ensureArrays(P);
+  const i = P.field.indexOf(cardObj);
+  if (i !== -1) {
+    const [c] = P.field.splice(i, 1);
+    P.discardPile.push(c);
+  }
+}
+
+function discardRandomTrap(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureArrays(P);
+  const idx = P.field.findIndex(c => c && isTrap(c.cardId));
+  if (idx !== -1) {
+    const [c] = P.field.splice(idx, 1);
+    P.discardPile.push(c);
+    return true;
+  }
+  return false;
+}
+
+function revealRandomEnemyTrap(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureArrays(P);
+  const traps = P.field.filter(c => c && isTrap(c.cardId) && c.isFaceDown);
+  if (traps.length) {
+    const chosen = traps[Math.floor(Math.random() * traps.length)];
+    chosen.isFaceDown = false;
+    return true;
+  }
+  return false;
+}
+
+function destroyEnemyInfected(foeKey) {
+  const P = duelState.players[foeKey];
+  ensureArrays(P);
+  const idx = P.field.findIndex(c => {
+    const m = getMeta(c.cardId);
+    return looksInfected(m);
+  });
+  if (idx !== -1) {
+    const [c] = P.field.splice(idx, 1);
+    P.discardPile.push(c);
+    return true;
+  }
+  return false;
+}
+
+/* -------------- UI-side effect resolver (bot) -------------- */
+/**
+ * Minimal parser that understands a broader set of phrases that appear in allCards.json.
+ * This runs for bot's NON-TRAP face-up cards so their effects are visible immediately.
+ */
+function resolveImmediateEffect(meta, ownerKey) {
+  if (!meta) return;
+
+  const you = ownerKey;                        // 'player2'
+  const foe = ownerKey === 'player1' ? 'player2' : 'player1'; // -> 'player1'
+  const text = String(meta.effect || '').toLowerCase();
+
+  // --- damage
+  const mDmg = text.match(/deal\s+(\d+)\s*dmg/);
+  if (mDmg) changeHP(foe, -Number(mDmg[1]));
+
+  // --- heal
+  const mHeal = text.match(/heal\s+(\d+)/);
+  if (mHeal) changeHP(you, +Number(mHeal[1]));
+
+  // --- draws (supports "draw 1 card", "draw a card", "draw 1 loot card", "draw 2 loot cards")
+  const mDraw = text.match(/draw\s+(a|\d+)\s+(?:loot\s+)?card/);
+  if (mDraw) {
+    const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
+    for (let i = 0; i < n; i++) drawFor(you);
+  }
+
+  // --- discard 1 card from owner's hand (not the "discard this card after use" clause)
+  if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
+    const hand = duelState.players[you].hand;
+    if (hand.length) {
+      const tossed = hand.pop();
+      duelState.players[you].discardPile ||= [];
+      duelState.players[you].discardPile.push(tossed);
+    }
+  }
+
+  // --- skip next draw
+  if (/skip\s+next\s+draw/.test(text)) {
+    duelState.players[you].skipNextDraw = true;
+  }
+
+  // --- destroy/remove enemy field card (various phrasings)
+  if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
+    const foeField = duelState.players[foe].field || [];
+    if (foeField.length) {
+      const idx = /random/.test(text) ? Math.floor(Math.random() * foeField.length) : 0;
+      const [destroyed] = foeField.splice(idx, 1);
+      duelState.players[foe].discardPile ||= [];
+      duelState.players[foe].discardPile.push(destroyed);
+    }
+  }
+
+  // --- explicitly target "infected"
+  if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(text)) {
+    destroyEnemyInfected(foe);
+  }
+
+  // --- disarm/remove trap
+  if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) {
+    discardRandomTrap(foe);
+  }
+
+  // --- reveal a face-down trap
+  if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
+    revealRandomEnemyTrap(foe);
+  }
+}
+
+/** Scan bot field for newly-placed non-traps and resolve them once. */
+function resolveBotNonTrapCardsOnce() {
+  const bot = duelState?.players?.player2;
+  if (!bot || !Array.isArray(bot.field)) return;
+  for (const card of bot.field.slice()) {
+    // Only resolve if face-up, non-trap, and not already resolved by the UI
+    if (card && !card.isFaceDown && !isTrap(card.cardId) && !card._resolvedByUI) {
+      const meta = getMeta(card.cardId);
+      resolveImmediateEffect(meta, 'player2');
+
+      if (shouldAutoDiscard(meta)) {
+        moveFieldCardToDiscard('player2', card);
+      } else {
+        // tag so we don't re-apply on subsequent re-renders
+        card._resolvedByUI = true;
+      }
+    }
+  }
 }
 
 /* ------------------ display helpers ------------------ */
@@ -69,9 +267,7 @@ function setHpText() {
 }
 
 /* ------------------ state normalizers ------------------ */
-function asIdString(id) {
-  return String(id).padStart(3, '0');
-}
+function asIdString(id) { return pad3(id); }
 
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
@@ -89,9 +285,9 @@ function toFieldEntry(objOrId) {
 }
 
 function normalizePlayerForServer(p) {
-  if (!p) return { hp: 200, hand: [], field: [], deck: [], discardPile: [] };
+  if (!p) return { hp: MAX_HP, hand: [], field: [], deck: [], discardPile: [] };
   return {
-    hp: Number(p.hp ?? 200),
+    hp: Number(p.hp ?? MAX_HP),
     hand: Array.isArray(p.hand) ? p.hand.map(e => toEntry(e, false)) : [],
     field: Array.isArray(p.field) ? p.field.map(e => toEntry(e, false)) : [],
     deck: Array.isArray(p.deck) ? p.deck.map(e => toEntry(e, false)) : [],
@@ -159,13 +355,6 @@ function mergeServerIntoUI(server) {
 }
 
 /* --------------- UI safety clamps (display only) --------------- */
-function ensureArrays(p) {
-  p.hand ||= [];
-  p.field ||= [];
-  p.deck ||= [];
-  p.discardPile ||= [];
-}
-
 function clampFields(state) {
   try {
     ['player1', 'player2'].forEach(pk => {
@@ -260,8 +449,11 @@ export function renderDuelUI() {
   // Ensure zones/buttons are allowed to show (CSS gate)
   document.body.classList.add('duel-ready');
 
-  // Defensive clamp before any draw
+  // Defensive clamp before any draw / effects
   clampFields(duelState);
+
+  // ⚙️ Resolve any new, face-up bot cards (non-traps) once
+  resolveBotNonTrapCardsOnce();
 
   renderZones();
   setHpText();
