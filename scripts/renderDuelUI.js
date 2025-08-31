@@ -85,7 +85,10 @@ function drawFromDeckWhere(playerKey, predicate) {
   if (P.hand.length >= MAX_HAND) return false;
 
   const idx = P.deck.findIndex(e => {
-    const meta = getMeta(typeof e === 'object' ? e.cardId : e);
+    const cid = (typeof e === 'object' && e !== null)
+      ? (e.cardId ?? e.id ?? e.card_id)
+      : e;
+    const meta = getMeta(cid);
     return predicate(meta);
   });
 
@@ -97,7 +100,7 @@ function drawFromDeckWhere(playerKey, predicate) {
   return drawFor(playerKey);
 }
 
-const isType = t => meta => String(meta?.type || '').toLowerCase() === t;
+const isType  = t => meta => String(meta?.type || '').toLowerCase() === t;
 const hasTagP = t => meta => hasTag(meta, t);
 
 /* ---------------- discard / resolve helpers ---------------- */
@@ -164,12 +167,12 @@ function destroyEnemyInfected(foeKey) {
   return false;
 }
 
-/* --------- utility: parse 10x2 style damage or normal “deal X DMG” --------- */
+/* --------- utility: parse 10x2 style damage or normal “deal X DMG/DAMAGE” --------- */
 function damageFromText(effectText) {
   const s = String(effectText || '').toLowerCase();
   const mult = s.match(/(\d+)\s*[x×]\s*(\d+)/);
   if (mult) return Number(mult[1]) * Number(mult[2]);
-  const m = s.match(/deal[s]?\s+(\d+)\s*dmg/);
+  const m = s.match(/deal[s]?\s+(\d+)\s*(?:dmg|damage)\b/);
   return m ? Number(m[1]) : 0;
 }
 
@@ -185,7 +188,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   const foe = ownerKey === 'player1' ? 'player2' : 'player1'; // -> 'player1'
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
 
-  // --- damage (supports "10x2" and "deal/deals X DMG")
+  // --- damage (supports "10x2" and "deal/deals X DMG/DAMAGE")
   const dmg = damageFromText(text);
   if (dmg > 0) changeHP(foe, -dmg);
 
@@ -193,17 +196,19 @@ function resolveImmediateEffect(meta, ownerKey) {
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) changeHP(you, +Number(mHeal[1]));
 
-  // --- draws (supports categories)
+  // --- generic draws
   const mDraw = text.match(/draw\s+(a|\d+)\s+(?:card|cards)/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
+
+  // --- category draws (exact phrasings)
   if (/draw\s+1\s+loot\s+card/.test(text))     drawFromDeckWhere(you, isType('loot'));
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
-  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, isType('trap') || hasTagP('trap'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
+  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (meta) => isType('trap')(meta) || hasTag(meta, 'trap'));
 
   // --- discard 1 card from owner's hand (not the "discard after use" clause)
   if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
@@ -482,6 +487,10 @@ async function maybeRunBotTurn() {
     console.error('[UI] Bot move error:', err);
   } finally {
     botTurnInFlight = false;
+
+    // Resolve any new bot non-trap cards immediately (so effects/auto-discard apply now)
+    resolveBotNonTrapCardsOnce();
+
     // Re-render after bot move (or failure) to keep UI fresh
     setHpText();
     setTurnText();
