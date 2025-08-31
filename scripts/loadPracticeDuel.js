@@ -20,10 +20,8 @@ const MAX_HP = 200;
 const pad3 = id => String(id).padStart(3, '0');
 
 function getMeta(cardId) {
-  // Lazy import via cached allCards module used by render… is unnecessary here;
-  // we only need trap detection using type/tags when available in objects.
   try {
-    // optional import — safe if module exists already
+    // optional cache if you’ve exposed it elsewhere; safe if missing
     // eslint-disable-next-line no-undef
     const allCards = window.__ALL_CARDS__ || null;
     if (!allCards) return null;
@@ -48,7 +46,6 @@ function isTrap(cardId, maybeMeta) {
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    // preserve explicit isFaceDown if provided; otherwise use default
     return { cardId: pad3(cid), isFaceDown: objOrId.isFaceDown ?? defaultFaceDown };
   }
   return { cardId: pad3(objOrId), isFaceDown: defaultFaceDown };
@@ -71,7 +68,7 @@ function hideZonesAndControlsExceptStart() {
   const controls = document.querySelectorAll('#controls button');
   controls.forEach(btn => { if (btn && btn.id !== 'startPracticeBtn') hide(btn); });
 
-  // CSS gate as well (keeps everything hidden until we flip)
+  // CSS gate OFF until flip finishes
   setDuelReady(false);
 
   // keep the turn banner hidden until after the flip
@@ -94,6 +91,9 @@ function showZonesAndControls() {
 
 /* ---------------- main ---------------- */
 export async function loadPracticeDuel() {
+  // Hard gate: mark duel as not started so other renderers/bot logic ignore it
+  duelState.started = false;
+
   // 0) Immediately ensure only the Start button is visible
   hideZonesAndControlsExceptStart();
 
@@ -171,7 +171,7 @@ export async function loadPracticeDuel() {
     console.warn('[practice] normalization warning:', e);
   }
 
-  // 5) Merge into UI state (but still keep zones hidden)
+  // 5) Merge into UI state (but still keep zones hidden & not started)
   Object.assign(duelState, data);
 
   // 6) Coin flip FIRST — await the animation promise so we only reveal after toast
@@ -180,6 +180,9 @@ export async function loadPracticeDuel() {
   } catch (e) {
     console.warn('coinFlip animation issue (non-fatal):', e);
   }
+
+  // Mark duel as started only AFTER the coin flip finishes
+  duelState.started = true;
 
   // 7) Now reveal zones and render the "dealt" state
   const s = $('startPracticeBtn');
