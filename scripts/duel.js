@@ -141,6 +141,8 @@ function shouldAutoDiscard(meta) {
     /discard\s+after\s+use/,
     /then\s+discard\s+this\s+card/,
     /discard\s+with\s+no\s+effect/,
+    /discard\s+when\s+used/,
+    /discard\s+upon\s+activation/,
   ];
   if (phrases.some(rx => rx.test(effect) || rx.test(logic))) return true;
 
@@ -174,7 +176,7 @@ function consumeAttackBuff(playerKey, meta, baseDmg) {
 
   // Restrict multipliers/bonuses by tags if provided
   const isGun = hasTag(meta, 'gun') || txt(meta.type) === 'attack';
-  const allowed = b.attackRestrictTags; // Set(['sniper','scoped_pistol','hunting_rifle','silenced_rifle']) etc.
+  const allowed = b.attackRestrictTags; // Set([...]) when present
   const metaTags = tagset(meta);
 
   const tagOK = !allowed || [...allowed].some(t => metaTags.has(t));
@@ -281,6 +283,42 @@ function drawFromDiscard(playerKey, filterFn) {
   return true;
 }
 
+// Field utilities used by several effects
+function discardRandomTrap(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  const trapIdxs = P.field
+    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) }))
+    .filter(o => isTrapMeta(o.m));
+  if (!trapIdxs.length) return false;
+  const pick = trapIdxs[Math.floor(Math.random() * trapIdxs.length)];
+  const [c] = P.field.splice(pick.i, 1);
+  P.discardPile.push(c);
+  triggerAnimation('explosion');
+  return true;
+}
+
+function revealRandomEnemyTrap(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  const traps = P.field.filter(c => c && isTrapMeta(getMeta(c.cardId)) && c.isFaceDown);
+  if (!traps.length) return false;
+  const chosen = traps[Math.floor(Math.random() * traps.length)];
+  chosen.isFaceDown = false;
+  return true;
+}
+
+function destroyEnemyInfected(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  const idx = P.field.findIndex(e => txt(getMeta(e.cardId)?.type) === 'infected' || /infected/i.test(getMeta(e.cardId)?.name || ''));
+  if (idx < 0) return false;
+  const [c] = P.field.splice(idx, 1);
+  P.discardPile.push(c);
+  triggerAnimation('explosion');
+  return true;
+}
+
 function trapAutoTriggersNow(meta) {
   const s = `${txt(meta.effect)} ${txt(meta.logic_action)}`;
   return /triggered\s+by\s+play|triggered\s+automatically|trigger\s+on\s+enemy\s+card/.test(s);
@@ -321,19 +359,16 @@ function resolveImmediateEffect(meta, ownerKey) {
     }
   }
 
-  // over N turns (basic dot → immediate approximation  value*N/turns kept simple)
+  // over N turns (basic dot → immediate approximation)
   const dot = etext.match(/(\d+)\s*dmg\s+over\s+(\d+)\s*turn/);
   if (dot) {
     const per = Number(dot[1]);
     const turns = Number(dot[2]);
-    // apply now as a simple approximation
     changeHP(foe, -per);
-    // store a lightweight dot (optional)
     duelState.players[foe].buffs.dot = { amount: per, turns };
   }
 
   // ---------- HEAL ----------
-  // Restore / Heal X
   const mHeal = etext.match(/(restore|heal)\s+(\d+)\s*hp/);
   if (mHeal) {
     changeHP(you, Number(mHeal[2]));
@@ -341,15 +376,16 @@ function resolveImmediateEffect(meta, ownerKey) {
   }
 
   // ---------- DRAWS ----------
-  // draw a / draw N card(s)
   const mDraw = etext.match(/draw\s+(a|\d+)\s+card/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // category draws
-  if (/draw\s+1\s+trap\s+card/.test(etext))       drawFromDeckWhere(you, isType('trap') || has('trap'));
+  // category draws (fix: pass a predicate function, not (fn || fn))
+  if (/draw\s+1\s+trap\s+card/.test(etext)) {
+    drawFromDeckWhere(you, m => isType('trap')(m) || has('trap')(m));
+  }
   if (/draw\s+1\s+defense\s+card/.test(etext))    drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(etext))   drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+loot\s+card/.test(etext))       drawFromDeckWhere(you, isType('loot'));
@@ -392,6 +428,15 @@ function resolveImmediateEffect(meta, ownerKey) {
       duelState.players[foe].discardPile.push(destroyed);
       triggerAnimation('explosion');
     }
+  }
+  if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(etext)) {
+    destroyEnemyInfected(foe);
+  }
+  if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(etext)) {
+    discardRandomTrap(foe);
+  }
+  if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(etext)) {
+    revealRandomEnemyTrap(foe);
   }
   if (/steal[s]?\s+1\s+defense\s+card/.test(etext)) {
     // steal from foe hand first, otherwise from field
@@ -440,7 +485,7 @@ function resolveImmediateEffect(meta, ownerKey) {
     drawFromDiscard(you, m => txt(m.type) === 'loot');
   }
 
-  // ---------- INFECTED-SPECIFIC ----------
+  // ---------- INFECTED-SPECIFIC (when the card itself is infected) ----------
   if (type === 'infected') {
     if (/deal[s]?\s+(\d+)\s*dmg/.test(etext)) {
       const dm = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
@@ -465,7 +510,8 @@ function resolveImmediateEffect(meta, ownerKey) {
         const pick = pool[Math.floor(Math.random()*pool.length)];
         const card = takeFn(pick.i);
         // resolve spawned infected immediately
-        resolveImmediateEffect(getMeta(card.cardId), you);
+        const entry = toEntry(card, you === 'player2');
+        resolveImmediateEffect(getMeta(entry.cardId), you);
         return true;
       };
       const P = duelState.players[you];
@@ -488,8 +534,7 @@ function resolveImmediateEffect(meta, ownerKey) {
 
   // ---------- TRAPS that auto-trigger on play ----------
   if (isTrapMeta(meta) && trapAutoTriggersNow(meta)) {
-    // Use the same parsed effects above; we already applied them.
-    // Mark for discard after activation.
+    // Effects above already applied; mark for discard after activation.
     duelState.players[you].buffs._forceDiscardPlayedTrap = true;
   }
 }
@@ -538,13 +583,13 @@ export function playCard(cardIndex) {
   }
 
   const meta = getMeta(card.cardId);
-  const isTrap = isTrapMeta(meta);
+  const trap = isTrapMeta(meta);
 
   // Place on field (traps face-down, others face-up for a moment)
-  card.isFaceDown = isTrap ? true : false;
+  card.isFaceDown = trap ? true : false;
   player.field.push(card);
 
-  if (isTrap) {
+  if (trap) {
     console.log(`🪤 Set trap: ${meta?.name ?? card.cardId} (face-down)`);
     triggerAnimation('trap');
 
