@@ -63,11 +63,14 @@
   </div>
 
   <!-- Overlay for announcements -->
-  <div id="announcement" class="overlay hidden"></div>
+  <div id="announcement" class="overlay hidden" aria-live="polite"></div>
 
-  <!-- Coin Flip Animation -->
-  <div id="coinFlipContainer" style="display:none; position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 9999;">
-    <img src="images/coinflip.gif" alt="Coin Flip" style="width: 120px; height: 120px;" />
+  <!-- Coin Flip Animation (centered & layered via CSS) -->
+  <div id="coinFlipContainer">
+    <div class="coin-flip-container">
+      <img class="coin-flip-image" src="images/coinflip.gif" alt="Coin Flip" />
+      <div class="coin-flip-result" aria-hidden="true"></div>
+    </div>
   </div>
 
   <a href="https://madv313.github.io/HUB-UI/" class="return-to-hub">← Return to Hub</a>
