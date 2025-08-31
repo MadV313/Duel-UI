@@ -14,7 +14,7 @@ let coinFlipInProgress = false;
  * to sequence "flip → toast → reveal UI/cards".
  *
  * IMPORTANT:
- *  - This function no longer forces a full UI render by default. That prevents
+ *  - This function does NOT force a full UI render by default. That prevents
  *    the board from appearing before the flip finishes. If you really want the
  *    render to happen here, pass { renderAfter: true }.
  *
@@ -33,7 +33,7 @@ export function flipCoin(forceWinner = null, opts = {}) {
     duration = 2600,
     announce = true,
     revealAt,
-    renderAfter = false, // ⬅️ default false so loadPracticeDuel controls when to reveal
+    renderAfter = false, // ⬅️ keep false; loadPracticeDuel reveals after awaiting this promise
   } = opts;
 
   // If a flip is already running, don't start another; just resolve to current.
@@ -90,32 +90,56 @@ export function flipCoin(forceWinner = null, opts = {}) {
     return Promise.resolve(decided);
   }
 
-  // Stage 1: start flip — show "Flipping…" first
-  if (gif) gif.style.display = 'block';
-  if (overlay) {
-    if (announce) overlay.textContent = '🪙 Flipping…';
-    overlay.classList.remove('hidden');
-    overlay.style.removeProperty('display');
-  }
-  triggerAnimation('combo');
+  // Stage 1: force the flip UI visible and guarantee a paint before timers start
+  try {
+    if (gif) {
+      gif.style.display = 'block';
+      gif.style.visibility = 'visible';
+    }
+    if (overlay) {
+      if (announce) overlay.textContent = '🪙 Flipping…';
+      overlay.classList.remove('hidden');
+      overlay.style.removeProperty('display');
+      overlay.style.visibility = 'visible';
+    }
+    // Kick a quick animation pulse (visual flair)
+    triggerAnimation('combo');
+
+    // Force a reflow so browsers actually paint before we schedule the reveal
+    // (prevents the "skip" feel on some devices)
+    // eslint-disable-next-line no-unused-expressions
+    overlay && overlay.offsetHeight;
+  } catch { /* non-fatal UI prep */ }
 
   // Stage 2: reveal winner mid-animation for readability
   const safeDuration = Math.max(800, Number(duration) || 2600);
   const revealMs = Math.max(700, Math.min(safeDuration - 500, revealAt ?? Math.floor(safeDuration * 0.6)));
 
   return new Promise(resolve => {
-    setTimeout(() => {
-      if (overlay && announce) overlay.textContent = resultText;
-      showTurnBanner();
+    const revealTimer = setTimeout(() => {
+      try {
+        if (overlay && announce) overlay.textContent = resultText;
+        showTurnBanner();
+      } catch {}
     }, revealMs);
 
     // Stage 3: wrap up and (optionally) render, then resolve AFTER toast hides
-    setTimeout(() => {
-      if (overlay) overlay.classList.add('hidden');
-      if (gif) gif.style.display = 'none';
-      if (renderAfter) renderDuelUI();
-      coinFlipInProgress = false;
-      resolve(decided);
+    const endTimer = setTimeout(() => {
+      try {
+        if (overlay) overlay.classList.add('hidden');
+        if (gif) gif.style.display = 'none';
+        if (renderAfter) renderDuelUI();
+      } finally {
+        coinFlipInProgress = false;
+        resolve(decided);
+      }
     }, safeDuration);
+
+    // (Defensive) If the page is being torn down, clear timers
+    window.addEventListener('beforeunload', () => {
+      clearTimeout(revealTimer);
+      clearTimeout(endTimer);
+      coinFlipInProgress = false;
+    }, { once: true });
   });
 }
