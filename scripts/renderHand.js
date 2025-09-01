@@ -91,12 +91,45 @@ function showActionMenuFor(el, player, index) {
   };
 }
 
+/* ---------- discard counter helpers ---------- */
+function getOrCreateDiscardCounter(container, player) {
+  // one counter per hand container; keep it stable across renders
+  const id = `${player}-discard-counter`;
+  let node = container.querySelector(`#${id}`);
+  if (!node) {
+    node = document.createElement('div');
+    node.id = id;
+    node.className = 'discard-counter';
+    // mild default styling hook; rely on existing CSS to place/size
+    // (e.g., .discard-counter { margin-top: .5rem; font-size: 0.9rem; opacity: .8; })
+    container.appendChild(node);
+  }
+  return node;
+}
+
+function updateDiscardCounter(container, player) {
+  try {
+    const pile = Array.isArray(duelState?.players?.[player]?.discardPile)
+      ? duelState.players[player].discardPile
+      : [];
+    const count = pile.length;
+
+    // Keep the counter present even if 0 — that’s useful for testing
+    const el = getOrCreateDiscardCounter(container, player);
+    el.textContent = `Discard: ${count}`;
+    el.dataset.count = String(count);
+  } catch {
+    // noop
+  }
+}
+
 /**
  * Render the hand for a given player.
  * - When `isSpectator` is true, clicks are disabled.
  * - Opponent (player2) hand is auto face-down for non-spectators.
  * - Accepts card entries as objects ({cardId,isFaceDown}) or raw ids.
  * - Adds data-* attributes for easier debugging/inspection.
+ * - Always renders a discard counter under the hand.
  */
 export function renderHand(player, isSpectator = false) {
   const handContainer = document.getElementById(`${player}-hand`);
@@ -112,11 +145,10 @@ export function renderHand(player, isSpectator = false) {
 
   console.log(`🖐️ Rendering hand for ${player} (${hand.length} cards)`, hand);
 
-  if (hand.length === 0) return;
-
   // ✅ Hide opponent's hand unless spectator
   const hideHand = !isSpectator && player === 'player2';
 
+  // Render all cards currently in hand (0..N)
   hand.forEach((entry, index) => {
     // Normalize entry
     const rawId =
@@ -157,4 +189,7 @@ export function renderHand(player, isSpectator = false) {
 
     handContainer.appendChild(el);
   });
+
+  // Always render/update the discard counter under the hand
+  updateDiscardCounter(handContainer, player);
 }
