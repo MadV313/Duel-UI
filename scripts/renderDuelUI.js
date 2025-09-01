@@ -348,6 +348,44 @@ function setHpText() {
   } catch {}
 }
 
+/* --------- discard counter helpers (UI only) --------- */
+function counterId(player) { return `${player}-discard-counter`; }
+
+function ensureCounterNode(afterNode, playerLabel = '') {
+  if (!afterNode || !afterNode.parentElement) return null;
+  const id = counterId(afterNode.id.replace('-hand',''));
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.className = 'discard-counter';
+    // insert right after the hand container
+    afterNode.insertAdjacentElement('afterend', el);
+  }
+  if (playerLabel) el.dataset.playerLabel = playerLabel; // optional for theming/testing
+  return el;
+}
+
+function updateDiscardCounters() {
+  try {
+    const p1 = duelState?.players?.player1;
+    const p2 = duelState?.players?.player2;
+    ensureArrays(p1 || {});
+    ensureArrays(p2 || {});
+
+    const p1Hand = document.getElementById('player1-hand');
+    const p2Hand = document.getElementById('player2-hand');
+
+    const c1 = ensureCounterNode(p1Hand, 'player1');
+    const c2 = ensureCounterNode(p2Hand, 'player2');
+
+    if (c1) c1.textContent = `Discard: ${Array.isArray(p1.discardPile) ? p1.discardPile.length : 0}`;
+    if (c2) c2.textContent = `Discard: ${Array.isArray(p2.discardPile) ? p2.discardPile.length : 0}`;
+  } catch (e) {
+    console.warn('[discard-counter] update failed:', e);
+  }
+}
+
 /* ------------------ state normalizers ------------------ */
 function asIdString(id) { return pad3(id); }
 
@@ -580,6 +618,7 @@ async function maybeRunBotTurn() {
     setHpText();
     setTurnText();
     renderZones();
+    updateDiscardCounters();
   }
 }
 
@@ -606,6 +645,7 @@ export function renderDuelUI() {
   renderZones();
   setHpText();
   setTurnText();
+  updateDiscardCounters();
 
   // If duel is over, save summary (non-spectator) and redirect
   if (duelState.winner) {
