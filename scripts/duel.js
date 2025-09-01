@@ -51,7 +51,8 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
+    // Respect default if isFaceDown is missing
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
