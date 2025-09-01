@@ -117,11 +117,7 @@ function shouldAutoDiscard(meta) {
     /discard\s+this\s+card\s+(?:after|upon)\s+use/,
     /discard\s+after\s+use/,
     /use:\s*discard\s+this\s+card/,
-    /then\s+discard\s+this\s+card/,
-    /discard\s+with\s+no\s+effect/,
-    /discard\s+when\s+used/,
-    /discard\s+upon\s+activation/,
-    /immediately\s+discard/
+    /then\s+discard\s+this\s+card/
   ];
   return patterns.some(rx => rx.test(effect) || rx.test(logic));
 }
@@ -181,10 +177,39 @@ function damageFromText(effectText) {
   return m ? Number(m[1]) : 0;
 }
 
+/* ---------- persistence helper (mirror duel.js) ---------- */
+function isPersistentOnField(meta) {
+  if (!meta) return false;
+  const t = String(meta.type || '').toLowerCase();
+  if (t === 'defense') return true;
+  if (t === 'trap') return true;
+  const tags = new Set(tagsOf(meta));
+  return tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor');
+}
+
+function cleanupEndOfTurnLocal(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureArrays(P);
+  if (!Array.isArray(P.field) || !P.field.length) return;
+
+  const keep = [];
+  const toss = [];
+  for (const card of P.field) {
+    const meta = getMeta(typeof card === 'object' ? card.cardId : card);
+    if (isPersistentOnField(meta)) keep.push(card);
+    else toss.push(card);
+  }
+  if (toss.length) {
+    P.discardPile.push(...toss);
+  }
+  P.field = keep;
+}
+
 /* -------------- UI-side effect resolver (bot) -------------- */
 /**
  * Minimal parser that understands a broader set of phrases that appear in allCards.json.
- * This runs for bot's NON-TRAP face-up cards so their effects are visible immediately.
+ * Runs for bot's NON-TRAP face-up cards so their effects are visible immediately.
+ * ❗ We no longer auto-discard here; end-of-turn will clean up ephemeral cards.
  */
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
@@ -257,7 +282,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   }
 }
 
-/** Scan bot field for newly-placed non-traps and resolve them once. */
+/** Scan bot field for newly-placed non-traps and resolve them once (no auto-discard here). */
 function resolveBotNonTrapCardsOnce() {
   const bot = duelState?.players?.player2;
   if (!bot || !Array.isArray(bot.field)) return;
@@ -267,13 +292,8 @@ function resolveBotNonTrapCardsOnce() {
       const meta = getMeta(card.cardId);
       resolveImmediateEffect(meta, 'player2');
 
-      // Discard immediately ONLY if the card explicitly says so
-      if (shouldAutoDiscard(meta)) {
-        moveFieldCardToDiscard('player2', card);
-      } else {
-        // tag so we don't re-apply on subsequent re-renders
-        card._resolvedByUI = true;
-      }
+      // Do NOT auto-discard anymore; wait for end of bot's turn.
+      card._resolvedByUI = true;
     }
   }
 }
@@ -543,12 +563,17 @@ async function maybeRunBotTurn() {
   } catch (err) {
     console.error('[UI] Bot move error:', err);
   } finally {
+    // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemeral).
+    if (duelState.currentPlayer === 'player1') {
+      cleanupEndOfTurnLocal('player2');
+    }
+
     botTurnInFlight = false;
 
     // If bot handed the turn back, guarantee the human gets a start-of-turn draw now.
     startTurnDrawIfNeeded();
 
-    // Resolve any new bot non-trap cards immediately (so effects/auto-discard apply now)
+    // Resolve any new bot non-trap cards immediately (so effects apply now). No auto-discard.
     resolveBotNonTrapCardsOnce();
 
     // Re-render after bot move (or failure) to keep UI fresh
@@ -575,7 +600,7 @@ export function renderDuelUI() {
   // If it's now your turn (e.g., right after a bot merge), ensure you got your start draw.
   startTurnDrawIfNeeded();
 
-  // ⚙️ Resolve any new, face-up bot cards (non-traps) once
+  // ⚙️ Resolve any new, face-up bot cards (non-traps) once (no auto-discard)
   resolveBotNonTrapCardsOnce();
 
   renderZones();
