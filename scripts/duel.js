@@ -51,8 +51,7 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    // Respect default if isFaceDown is missing
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
@@ -138,7 +137,7 @@ const has = t => meta => hasTag(meta, t);
 
 /* ---------- discard helpers ---------- */
 
-/** Returns true if played card should be discarded immediately after resolving. */
+/** Returns true if a card’s own text requires immediate discard (rare). */
 function shouldAutoDiscard(meta) {
   if (!meta) return false;
 
@@ -157,10 +156,7 @@ function shouldAutoDiscard(meta) {
     /discard\s+upon\s+activation/,
     /immediately\s+discard/
   ];
-  if (phrases.some(rx => rx.test(effect) || rx.test(logic))) return true;
-
-  // DO NOT auto-discard just because it's not defense; we now prefer end-of-turn cleanup.
-  return false;
+  return phrases.some(rx => rx.test(effect) || rx.test(logic));
 }
 
 function moveFieldCardToDiscard(playerKey, cardObj) {
@@ -621,7 +617,7 @@ export function drawCard() {
  * - Interactive plays allowed only for local human (player1)
  * - Field has 3 slots (UI guard)
  * - Traps stay face-down; others resolve immediately
- * - NO auto-discard on play anymore (except explicit immediate/auto-trigger cases)
+ * - ❌ No auto-discard on play (we wait for end turn unless a trap explicitly auto-triggers)
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -676,14 +672,10 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // Non-traps resolve immediately, but DO NOT auto-discard on play by default
+  // Non-traps resolve immediately, but DO NOT discard on play
   resolveImmediateEffect(meta, playerKey);
 
-  // Only if the card explicitly says "discard after use / upon activation" do we remove now
-  if (shouldAutoDiscard(meta)) {
-    moveFieldCardToDiscard(playerKey, card);
-  }
-
+  // (Even if card text says "discard after use", we now wait until end of turn.)
   triggerAnimation('combo');
   renderDuelUI();
 }
