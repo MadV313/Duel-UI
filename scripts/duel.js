@@ -61,7 +61,7 @@ function ensureZones(p) {
   p.field       ||= [];
   p.deck        ||= [];
   p.discardPile ||= [];
-  p.buffs       ||= {}; // generic bag: { extraDrawPerTurn, blockHealTurns, skipNextTurn, skipNextDraw, nextAttackBonus, nextAttackMult, ... }
+  p.buffs       ||= {}; // generic bag
 }
 
 /** HP adjust with clamping (0–MAX_HP), obeying block-heal */
@@ -137,28 +137,6 @@ const has = t => meta => hasTag(meta, t);
 
 /* ---------- discard helpers ---------- */
 
-/** Returns true if a card’s own text requires immediate discard (rare). */
-function shouldAutoDiscard(meta) {
-  if (!meta) return false;
-
-  const T = tagset(meta);
-  if (T.has('discard_after_use') || T.has('consumable') || T.has('one_use')) return true;
-
-  const effect = txt(meta.effect);
-  const logic  = txt(meta.logic_action);
-
-  const phrases = [
-    /discard\s+this\s+card\s+(?:after|upon)\s+use/,
-    /discard\s+after\s+use/,
-    /then\s+discard\s+this\s+card/,
-    /discard\s+with\s+no\s+effect/,
-    /discard\s+when\s+used/,
-    /discard\s+upon\s+activation/,
-    /immediately\s+discard/
-  ];
-  return phrases.some(rx => rx.test(effect) || rx.test(logic));
-}
-
 function moveFieldCardToDiscard(playerKey, cardObj) {
   const P = duelState.players[playerKey];
   ensureZones(P);
@@ -207,10 +185,35 @@ function consumeAttackBuff(playerKey, meta, baseDmg) {
   return dmg;
 }
 
+/* ---------- TRAP ACTIVATION PIPELINE ---------- */
+
+/** Flip and resolve the first facedown trap on defender’s field, then discard it. */
+function triggerOneTrap(defenderKey) {
+  const D = duelState.players[defenderKey];
+  ensureZones(D);
+  const trapIdx = D.field.findIndex(
+    e => e && e.isFaceDown && isTrapMeta(getMeta(e.cardId))
+  );
+  if (trapIdx < 0) return false;
+
+  const trap = D.field[trapIdx];
+  trap.isFaceDown = false; // flip face-up for the reveal
+  const meta = getMeta(trap.cardId);
+
+  console.log(`🪤 Trap triggered for ${defenderKey}: ${meta?.name || trap.cardId}`);
+  triggerAnimation('trap');
+
+  // Apply trap effect for its owner (defender)
+  resolveImmediateEffect(meta, defenderKey);
+
+  // Traps always leave the field after firing
+  moveFieldCardToDiscard(defenderKey, trap);
+  return true;
+}
+
 /* ---------- textual effect resolver (UI side) ---------- */
 
 function parseNumberPairTimes(s) {
-  // "10x2" or "10 x 2" → 20
   const m = s.match(/(\d+)\s*[x×]\s*(\d+)/i);
   if (m) return Number(m[1]) * Number(m[2]);
   return null;
@@ -249,7 +252,6 @@ function stealOneFromHand(srcKey, dstKey, filterFn) {
 
   const pick = pool[Math.floor(Math.random() * pool.length)];
   const [card] = src.hand.splice(pick.i, 1);
-  // Normalize visibility
   const entry = toEntry(card, dstKey === 'player2');
   dst.hand.push(entry);
   console.log(`🕵️ Stole ${getMeta(entry.cardId)?.name || entry.cardId} from ${srcKey} → ${dstKey}`);
@@ -537,20 +539,19 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (isTrapMeta(meta) && trapAutoTriggersNow(meta)) {
     duelState.players[you].buffs._forceDiscardPlayedTrap = true;
   }
+
+  // ✅ NEW: If an Attack or Infected card was just played, trigger exactly one facedown trap on the defender.
+  if (type === 'attack' || type === 'infected') {
+    triggerOneTrap(foe);
+  }
 }
 
 /* ---------- start-of-turn auto draw (once per turn) ---------- */
 
-/**
- * Draw exactly once at the start of the active player's turn and apply
- * per-turn start effects. Idempotent within a turn using a simple flag.
- * Returns true if a draw/updates happened this call; false if already done.
- */
 export function startTurnIfNeeded() {
   const active = duelState.currentPlayer;
   if (!active) return false;
 
-  // Flag bucket: which player already consumed their start-of-turn this cycle
   duelState._startDrawDoneFor ||= { player1: false, player2: false };
 
   if (duelState._startDrawDoneFor[active]) {
@@ -561,20 +562,15 @@ export function startTurnIfNeeded() {
   if (!A) return false;
   ensureZones(A);
 
-  // Perform the automatic draw for the active player
   drawFor(active);
 
-  // Extra draws from per-turn buffs (e.g., backpacks/vests)
   const extra = Number(A.buffs?.extraDrawPerTurn || 0);
   for (let i = 0; i < extra; i++) drawFor(active);
 
-  // Decrement turn-limited buffs
   if (A.buffs.blockHealTurns > 0) A.buffs.blockHealTurns--;
 
-  // Apply any start-of-turn effects (DOT ticks, etc.)
   try { applyStartTurnBuffs(); } catch (e) { console.warn('[startTurnIfNeeded] applyStartTurnBuffs error:', e); }
 
-  // Mark as done so re-renders don't double-draw
   duelState._startDrawDoneFor[active] = true;
 
   return true;
@@ -587,8 +583,6 @@ function cleanupEndOfTurn(playerKey) {
   ensureZones(P);
   if (!Array.isArray(P.field) || !P.field.length) return;
 
-  // Keep traps & defenses (and anything explicitly marked persistent/equip/gear/armor)
-  // Discard ephemeral (attack/loot/tactical/infected) unless already removed.
   const keep = [];
   const toss = [];
   for (const card of P.field) {
@@ -606,7 +600,6 @@ function cleanupEndOfTurn(playerKey) {
 
 /* ---------- public actions ---------- */
 
-/** Manual Draw button (still available in mock or debug) */
 export function drawCard() {
   const who = duelState.currentPlayer; // 'player1' | 'player2'
   if (drawFor(who)) renderDuelUI();
@@ -641,7 +634,6 @@ export function playCard(cardIndex) {
 
   // Take card from hand
   let card = player.hand.splice(cardIndex, 1)[0];
-  // Normalize
   if (typeof card !== 'object' || card === null) {
     card = { cardId: pad3(card), isFaceDown: false };
   } else {
@@ -662,7 +654,6 @@ export function playCard(cardIndex) {
     // Auto-trigger-on-play traps fire now and then discard.
     if (trapAutoTriggersNow(meta)) {
       resolveImmediateEffect(meta, playerKey);
-      // If resolver flagged for discard, move it now.
       if (player.buffs._forceDiscardPlayedTrap) {
         player.buffs._forceDiscardPlayedTrap = false;
         moveFieldCardToDiscard(playerKey, card);
@@ -672,10 +663,9 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // Non-traps resolve immediately, but DO NOT discard on play
+  // Non-traps resolve immediately
   resolveImmediateEffect(meta, playerKey);
 
-  // (Even if card text says "discard after use", we now wait until end of turn.)
   triggerAnimation('combo');
   renderDuelUI();
 }
@@ -712,36 +702,28 @@ export async function endTurn() {
   try {
     setControlsDisabled(true);
 
-    // Player who is ending turn (cleanup applies to them)
     const ending = duelState.currentPlayer;
     const E = duelState.players[ending];
     ensureZones(E);
 
-    // Discard ephemeral field cards at end of THIS player's turn
     cleanupEndOfTurn(ending);
 
-    // Now pass the turn
     const next = ending === 'player1' ? 'player2' : 'player1';
     duelState.currentPlayer = next;
 
-    // Reset start-of-turn flags so the new active can draw once
     duelState._startDrawDoneFor = { player1: false, player2: false };
 
-    // Handle skip for the NEW active player
     const A = duelState.players[next];
     ensureZones(A);
     if (A.buffs.skipNextTurn) {
       console.log(`[turn] ${next} turn skipped.`);
       A.buffs.skipNextTurn = false;
 
-      // Tick start-of-turn effects for the skipped player
       try { applyStartTurnBuffs(); } catch (e) { console.warn('[endTurn] applyStartTurnBuffs error:', e); }
 
-      // Immediately pass back to the other player
       const back = next === 'player1' ? 'player2' : 'player1';
       duelState.currentPlayer = back;
 
-      // Reset flags again for the now-active player and start their turn
       duelState._startDrawDoneFor = { player1: false, player2: false };
       startTurnIfNeeded();
 
@@ -750,11 +732,10 @@ export async function endTurn() {
       return;
     }
 
-    // Normal start-of-turn for the new active player (auto-draw once)
     startTurnIfNeeded();
 
     triggerAnimation('turn');
-    renderDuelUI()(); // bot turn will be kicked from renderDuelUI
+    renderDuelUI(); // bot turn will be kicked from renderDuelUI
   } finally {
     setControlsDisabled(false);
   }
