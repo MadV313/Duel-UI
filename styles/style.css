@@ -193,16 +193,6 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Ensure the coin flip root container is centered & above all */
-#coinFlipContainer {
-  position: fixed;
-  inset: 0;
-  display: none;                 /* JS will toggle this */
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;                 /* above .overlay and animations */
-}
-
 .coin-flip-image {
   width: 100px;
   height: 100px;
@@ -272,7 +262,7 @@ body.mock-mode #duel-ui {
   margin: 8px auto 16px auto;
   max-width: 360px;  /* 3*100 + 2*12 gaps */
   min-height: 140px; /* keep the row visible even when empty */
-  position: relative; /* for ghost & discard bays */
+  position: relative; /* for ghost slots */
 }
 
 /* Ghost slot placeholders (3 dashed boxes) */
@@ -295,7 +285,7 @@ body.mock-mode #duel-ui {
      112px 0 0 0 rgba(255,255,255,0.25);
 }
 
-/* Hands: center 3 cards, reserve space for deck */
+/* Hands: center 3 cards, reserve space for deck + discard */
 #player1-hand, #player2-hand {
   display: flex !important;
   justify-content: center;
@@ -303,17 +293,17 @@ body.mock-mode #duel-ui {
   gap: 12px;
   margin-bottom: 16px;
   min-height: 160px; /* visual stability */
-  position: relative; /* anchor deck pseudo-elements */
+  position: relative; /* anchor deck/discount pseudo-elements */
   max-width: 480px;
   margin-left: auto;
   margin-right: auto;
 }
 
-/* reserve deck space so it never overlaps or drifts */
-#player1-hand { padding-right: 120px; }  /* deck on RIGHT */
-#player2-hand { padding-left: 120px; }   /* deck on LEFT  */
+/* reserve deck & discard space so they never overlap or drift */
+#player1-hand { padding-left: 120px;  padding-right: 120px; }  /* discard LEFT, deck RIGHT  */
+#player2-hand { padding-left: 120px;  padding-right: 120px; }  /* deck LEFT, discard RIGHT */
 
-/* Deck placeholders: now ABSOLUTE (won’t get pushed by draws) */
+/* Deck placeholders: ABSOLUTE (won’t get pushed by draws) */
 #player1-hand::after,
 #player2-hand::before {
   content: "";
@@ -334,6 +324,27 @@ body.mock-mode #duel-ui {
 
 #player1-hand::after {  right: 0; } /* player deck at RIGHT */
 #player2-hand::before { left:  0; } /* opponent deck at LEFT */
+
+/* Discard pile placeholders (mirrored to opposite sides) */
+#player1-hand::before,
+#player2-hand::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  width: 100px;
+  height: 140px;
+  background: url('../images/cards/000_CardBack_Unique.png') center / cover no-repeat;
+  border-radius: 6px;
+  filter: grayscale(60%);
+  opacity: 0.95;
+  box-shadow: 0 0 6px rgba(0,0,0,0.6);
+  border: 2px dashed rgba(255,255,255,0.35); /* dashed to distinguish discard */
+  pointer-events: none;
+  z-index: 1;
+}
+
+#player1-hand::before { left: 0; }  /* player discard at LEFT  */
+#player2-hand::after  { right: 0; } /* opponent discard at RIGHT */
 
 /* Control bar */
 #controls {
@@ -421,17 +432,19 @@ body.mock-mode #duel-ui {
    DUEL-READY GATING (new)
    ========================= */
 
-/* Hide hands/fields + draw/end buttons until the app marks the page duel-ready */
+/* Always hide the Draw button (feature removed) */
+#drawBtn { display: none !important; }
+
+/* Hide hands/fields + end button until the app marks the page duel-ready */
 body:not(.duel-ready) #player1-hand,
 body:not(.duel-ready) #player2-hand,
 body:not(.duel-ready) #player1-field,
 body:not(.duel-ready) #player2-field,
-body:not(.duel-ready) #drawBtn,
 body:not(.duel-ready) #endTurnBtn {
   display: none !important;
 }
 
-/* Once ready, reveal zones/buttons (these restore your intended layouts) */
+/* Once ready, reveal zones/buttons (restore intended layouts) */
 body.duel-ready #player1-hand,
 body.duel-ready #player2-hand {
   display: flex !important;
@@ -440,12 +453,11 @@ body.duel-ready #player1-field,
 body.duel-ready #player2-field {
   display: grid !important;
 }
-body.duel-ready #drawBtn,
 body.duel-ready #endTurnBtn {
   display: inline-block !important;
 }
 
-/* After start, lock the control bar to bottom center (draw/end only) */
+/* After start, lock the control bar to bottom center (end turn only) */
 body.duel-ready #controls {
   position: fixed;
   left: 50%;
@@ -515,81 +527,3 @@ a.return-to-hub:hover {
   cursor: pointer;
 }
 .card-action-menu button:hover { transform: translateY(-1px); }
-
-/* ========================================
-   Discard Bay (per-field) — NEW
-   ======================================== */
-
-.discard-bay {
-  position: absolute;
-  top: 0;
-  width: 100px;
-  height: 140px;
-  border: 2px dashed rgba(255,255,255,0.25);
-  border-radius: 6px;
-  background: rgba(0,0,0,0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;          /* visual only */
-  z-index: 2;
-}
-
-/* Place the bay just outside the 3 slots */
-#player1-field .discard-bay { right: -120px; }
-#player2-field .discard-bay { left:  -120px; }
-
-/* Title above the bay */
-.discard-title {
-  position: absolute;
-  top: -18px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 12px;
-  color: #ddd;
-  text-shadow: 0 1px 2px #000;
-  pointer-events: none;
-}
-
-/* Card-back stack inside the bay */
-.discard-pile {
-  position: relative;
-  width: 100px;
-  height: 140px;
-}
-
-.discard-pile .card-back {
-  position: absolute;
-  inset: 0;
-  width: 100px;
-  height: 140px;
-  background: url('../images/cards/000_CardBack_Unique.png') center / cover no-repeat;
-  border-radius: 6px;
-  box-shadow: 0 0 6px rgba(0,0,0,0.6);
-  border: 2px solid rgba(255,255,255,0.15);
-  filter: none;
-  opacity: 1;
-}
-
-/* Offset a few backs for a stacked look */
-.discard-pile .card-back:nth-child(2) { transform: translate(4px, 4px); }
-.discard-pile .card-back:nth-child(3) { transform: translate(8px, 8px); }
-
-/* Count badge (bottom-right of the bay) */
-.discard-count {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 11px;
-  background: rgba(0,0,0,0.7);
-  color: #00ffff;
-  font-weight: bold;
-  font-size: 12px;
-  line-height: 22px;
-  text-align: center;
-  box-shadow: 0 0 6px rgba(0,255,255,0.2);
-  pointer-events: none;
-}
