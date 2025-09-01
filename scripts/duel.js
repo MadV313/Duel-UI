@@ -288,7 +288,7 @@ function discardRandomTrap(playerKey) {
   const P = duelState.players[playerKey];
   ensureZones(P);
   const trapIdxs = P.field
-    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) }))
+    .map((e, i) => ({ e, i, m: getMeta(typeof e === 'object' ? e.cardId : e) } ))
     .filter(o => isTrapMeta(o.m));
   if (!trapIdxs.length) return false;
   const pick = trapIdxs[Math.floor(Math.random() * trapIdxs.length)];
@@ -382,7 +382,7 @@ function resolveImmediateEffect(meta, ownerKey) {
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // category draws (fix: pass a predicate function, not (fn || fn))
+  // category draws
   if (/draw\s+1\s+trap\s+card/.test(etext)) {
     drawFromDeckWhere(you, m => isType('trap')(m) || has('trap')(m));
   }
@@ -539,9 +539,50 @@ function resolveImmediateEffect(meta, ownerKey) {
   }
 }
 
+/* ---------- start-of-turn auto draw (once per turn) ---------- */
+
+/**
+ * Draw exactly once at the start of the active player's turn and apply
+ * per-turn start effects. Idempotent within a turn using a simple flag.
+ * Returns true if a draw/updates happened this call; false if already done.
+ */
+export function startTurnIfNeeded() {
+  const active = duelState.currentPlayer;
+  if (!active) return false;
+
+  // Flag bucket: which player already consumed their start-of-turn this cycle
+  duelState._startDrawDoneFor ||= { player1: false, player2: false };
+
+  if (duelState._startDrawDoneFor[active]) {
+    return false; // already handled this turn for this player
+  }
+
+  const A = duelState.players[active];
+  if (!A) return false;
+  ensureZones(A);
+
+  // Perform the automatic draw for the active player
+  drawFor(active);
+
+  // Extra draws from per-turn buffs (e.g., backpacks/vests)
+  const extra = Number(A.buffs?.extraDrawPerTurn || 0);
+  for (let i = 0; i < extra; i++) drawFor(active);
+
+  // Decrement turn-limited buffs
+  if (A.buffs.blockHealTurns > 0) A.buffs.blockHealTurns--;
+
+  // Apply any start-of-turn effects (DOT ticks, etc.)
+  try { applyStartTurnBuffs(); } catch (e) { console.warn('[startTurnIfNeeded] applyStartTurnBuffs error:', e); }
+
+  // Mark as done so re-renders don't double-draw
+  duelState._startDrawDoneFor[active] = true;
+
+  return true;
+}
+
 /* ---------- public actions ---------- */
 
-/** Manual Draw button */
+/** Manual Draw button (still available in mock or debug) */
 export function drawCard() {
   const who = duelState.currentPlayer; // 'player1' | 'player2'
   if (drawFor(who)) renderDuelUI();
@@ -643,8 +684,9 @@ export function discardCard(cardIndex) {
 
 /**
  * End your turn.
- * Swap players → auto-draw for the NEW player (+ per-turn bonuses) → start-turn buffs → render.
- * (If it's the bot's turn, renderDuelUI will handle calling the backend.)
+ * Swap players → reset start-of-turn flags → startTurnIfNeeded for the NEW player
+ * → apply start-of-turn effects → render.
+ * (If it's the bot's turn, renderDuelUI will be responsible for kicking the backend.)
  */
 export async function endTurn() {
   try {
@@ -658,32 +700,31 @@ export async function endTurn() {
     const A = duelState.players[active];
     ensureZones(A);
 
-    // Skip entire turn if flagged
+    // Reset start-of-turn flags so the new active can draw once
+    duelState._startDrawDoneFor = { player1: false, player2: false };
+
+    // Skip entire turn if flagged (kept same behavior as before)
     if (A.buffs.skipNextTurn) {
       console.log(`[turn] ${active} turn skipped.`);
       A.buffs.skipNextTurn = false;
 
-      // Still tick turn-based buffs, then immediately pass to the other player
-      applyStartTurnBuffs();
-      // Swap back
+      // Still tick turn-based buffs/effects for the skipped player
+      try { applyStartTurnBuffs(); } catch (e) { console.warn('[endTurn] applyStartTurnBuffs error:', e); }
+
+      // Immediately pass back to the other player
       duelState.currentPlayer = active === 'player1' ? 'player2' : 'player1';
+
+      // Reset flags again for the new active, then start turn
+      duelState._startDrawDoneFor = { player1: false, player2: false };
+      startTurnIfNeeded();
+
       triggerAnimation('turn');
       renderDuelUI();
       return;
     }
 
-    // Auto-draw for whoever just became active
-    drawFor(active);
-
-    // Extra draws from per-turn buffs (e.g., backpacks/vests)
-    const extra = Number(A.buffs.extraDrawPerTurn || 0);
-    for (let i = 0; i < extra; i++) drawFor(active);
-
-    // Decrement limited-turn buffs
-    if (A.buffs.blockHealTurns > 0) A.buffs.blockHealTurns--;
-
-    // Apply other start-of-turn effects
-    applyStartTurnBuffs();
+    // Normal start-of-turn for the new active player (auto-draw once)
+    startTurnIfNeeded();
 
     triggerAnimation('turn');
     renderDuelUI(); // bot turn will be kicked from renderDuelUI
@@ -692,8 +733,9 @@ export async function endTurn() {
   }
 }
 
-// (Optional) also expose for any inline onclick fallbacks
-window.drawCard    = drawCard;
-window.endTurn     = endTurn;
-window.playCard    = playCard;
-window.discardCard = discardCard;
+// (Optional) also expose for any inline onclick fallbacks / external drivers
+window.drawCard          = drawCard;
+window.endTurn           = endTurn;
+window.playCard          = playCard;
+window.discardCard       = discardCard;
+window.startTurnIfNeeded = startTurnIfNeeded;
