@@ -57,6 +57,7 @@ function ensureArrays(p) {
   p.field ||= [];
   p.deck ||= [];
   p.discardPile ||= [];
+  p.buffs ||= {};
 }
 
 function changeHP(playerKey, delta) {
@@ -428,6 +429,50 @@ function clampFields(state) {
   } catch {}
 }
 
+/* ---------------- start-of-turn auto-draw (human only) ---------------- */
+function ensureTurnFlags() {
+  duelState._startDrawDoneFor ||= { player1: false, player2: false };
+  if (typeof duelState._startDrawDoneFor.player1 !== 'boolean') duelState._startDrawDoneFor.player1 = false;
+  if (typeof duelState._startDrawDoneFor.player2 !== 'boolean') duelState._startDrawDoneFor.player2 = false;
+}
+
+/**
+ * Ensures the newly active human draws exactly once at the start of their turn.
+ * Respects: started gate, skipNextDraw, extraDrawPerTurn, blockHealTurns--.
+ * NO network calls; purely UI-side. Does nothing for bot turns.
+ */
+function startTurnDrawIfNeeded() {
+  if (!duelState?.started) return;
+  if (duelState.winner) return;
+
+  ensureTurnFlags();
+
+  // Only auto-draw for the local human
+  if (duelState.currentPlayer !== 'player1') return;
+  if (duelState._startDrawDoneFor.player1) return;
+
+  const P = duelState.players?.player1;
+  if (!P) return;
+  ensureArrays(P);
+
+  // Respect "skip next draw"
+  if (P.buffs?.skipNextDraw) {
+    P.buffs.skipNextDraw = false;
+  } else {
+    drawFor('player1');
+  }
+
+  // Extra per-turn draws (e.g., backpacks/vests)
+  const extra = Number(P.buffs?.extraDrawPerTurn || 0);
+  for (let i = 0; i < extra; i++) drawFor('player1');
+
+  // Friendly decrement of heal-block timers at start of your turn
+  if (P.buffs?.blockHealTurns > 0) P.buffs.blockHealTurns--;
+
+  // Mark consumed so we don't re-run until the turn flips away and back
+  duelState._startDrawDoneFor.player1 = true;
+}
+
 /* ----------------- render helpers ----------------- */
 function renderZones() {
   // You: visible; Opponent: renderHand will auto-face-down in player view
@@ -495,6 +540,9 @@ async function maybeRunBotTurn() {
   } finally {
     botTurnInFlight = false;
 
+    // If bot handed the turn back, guarantee the human gets a start-of-turn draw now.
+    startTurnDrawIfNeeded();
+
     // Resolve any new bot non-trap cards immediately (so effects/auto-discard apply now)
     resolveBotNonTrapCardsOnce();
 
@@ -518,6 +566,9 @@ export function renderDuelUI() {
 
   // Defensive clamp before any draw / effects
   clampFields(duelState);
+
+  // If it's now your turn (e.g., right after a bot merge), ensure you got your start draw.
+  startTurnDrawIfNeeded();
 
   // ⚙️ Resolve any new, face-up bot cards (non-traps) once
   resolveBotNonTrapCardsOnce();
