@@ -205,6 +205,28 @@ function cleanupEndOfTurnLocal(playerKey) {
   P.field = keep;
 }
 
+/* ---------- Trap activation (UI side, for bot plays) ---------- */
+/** Flip + resolve the first facedown trap on defender, then discard it. */
+function triggerOneTrap(defenderKey) {
+  const D = duelState.players[defenderKey];
+  if (!D) return false;
+  ensureArrays(D);
+
+  const idx = D.field.findIndex(c => c && c.isFaceDown && isTrap(c.cardId));
+  if (idx < 0) return false;
+
+  const trap = D.field[idx];
+  trap.isFaceDown = false; // reveal
+  const meta = getMeta(trap.cardId);
+
+  // Apply trap for defender (its owner)
+  resolveImmediateEffect(meta, defenderKey);
+
+  // Traps leave after firing
+  moveFieldCardToDiscard(defenderKey, trap);
+  return true;
+}
+
 /* -------------- UI-side effect resolver (bot) -------------- */
 /**
  * Minimal parser that understands a broader set of phrases that appear in allCards.json.
@@ -214,9 +236,10 @@ function cleanupEndOfTurnLocal(playerKey) {
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
 
-  const you = ownerKey;                        // 'player2'
-  const foe = ownerKey === 'player1' ? 'player2' : 'player1'; // -> 'player1'
+  const you = ownerKey;                        // 'player2' when bot owns, but function is reused
+  const foe = ownerKey === 'player1' ? 'player2' : 'player1'; // opposite side
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
+  const type = String(meta.type || '').toLowerCase();
 
   // --- damage (supports "10x2" and "deal/deals X DMG/DAMAGE")
   const dmg = damageFromText(text);
@@ -279,6 +302,11 @@ function resolveImmediateEffect(meta, ownerKey) {
   // --- reveal a face-down trap
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
     revealRandomEnemyTrap(foe);
+  }
+
+  // ✅ NEW: if this resolved card is Attack or Infected, trigger exactly one facedown trap on the defender
+  if (type === 'attack' || type === 'infected') {
+    triggerOneTrap(foe);
   }
 }
 
