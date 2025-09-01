@@ -144,7 +144,6 @@ body {
 
 /* Face-Down Trap Styling */
 .card.face-down {
-  /* was grayscale + 0.85 opacity — make backs crisp & full color */
   filter: none;
   opacity: 1;
   border: 2px solid #555;
@@ -216,9 +215,7 @@ body {
 }
 
 /* Mock Mode Support */
-body.mock-mode #duel-ui {
-  display: block !important;
-}
+body.mock-mode #duel-ui { display: block !important; }
 
 #mock-controls {
   position: absolute;
@@ -238,9 +235,9 @@ body.mock-mode #duel-ui {
 #hp-display {
   display: flex;
   justify-content: space-between;
-  padding: 12px 80px;       /* moved text away from edges */
+  padding: 12px 80px;
   color: #f0f0f0;
-  font-size: 2.2rem;        /* roughly double of 1.1rem */
+  font-size: 2.2rem;
   font-weight: bold;
 }
 
@@ -253,16 +250,15 @@ body.mock-mode #duel-ui {
 
 #player1-field, #player2-field {
   display: grid !important;
-  /* 3-slot layout */
   grid-template-columns: repeat(3, 100px);
   grid-auto-rows: 1fr;
   gap: 12px;
   justify-content: center;
   align-content: start;
   margin: 8px auto 16px auto;
-  max-width: 360px;  /* 3*100 + 2*12 gaps */
-  min-height: 140px; /* keep the row visible even when empty */
-  position: relative; /* for ghost slots */
+  max-width: 360px;
+  min-height: 140px;
+  position: relative;
 }
 
 /* Ghost slot placeholders (3 dashed boxes) */
@@ -279,7 +275,6 @@ body.mock-mode #duel-ui {
   transform: translateX(-50%);
   pointer-events: none;
   z-index: 0;
-  /* left & right clones */
   box-shadow:
     -112px 0 0 0 rgba(255,255,255,0.25),
      112px 0 0 0 rgba(255,255,255,0.25);
@@ -292,18 +287,18 @@ body.mock-mode #duel-ui {
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
-  min-height: 160px; /* visual stability */
-  position: relative; /* anchor deck/discount pseudo-elements */
+  min-height: 160px;             /* visual stability */
+  position: relative;            /* anchor pseudo-elements */
   max-width: 480px;
   margin-left: auto;
   margin-right: auto;
 }
 
-/* reserve deck & discard space so they never overlap or drift */
-#player1-hand { padding-left: 120px;  padding-right: 120px; }  /* discard LEFT, deck RIGHT  */
-#player2-hand { padding-left: 120px;  padding-right: 120px; }  /* deck LEFT, discard RIGHT */
+/* Reserve deck & discard space on both sides */
+#player1-hand { padding-left: 120px; padding-right: 120px; } /* discard LEFT, deck RIGHT  */
+#player2-hand { padding-left: 120px; padding-right: 120px; } /* deck LEFT, discard RIGHT */
 
-/* Deck placeholders: ABSOLUTE (won’t get pushed by draws) */
+/* Deck placeholders (ABSOLUTE) */
 #player1-hand::after,
 #player2-hand::before {
   content: "";
@@ -313,7 +308,6 @@ body.mock-mode #duel-ui {
   height: 140px;
   background: url('../images/cards/000_CardBack_Unique.png') center / cover no-repeat;
   border-radius: 6px;
-  /* full-color, crisp */
   filter: none;
   opacity: 1;
   box-shadow: 0 0 6px rgba(0,0,0,0.6);
@@ -321,11 +315,10 @@ body.mock-mode #duel-ui {
   pointer-events: none;
   z-index: 1;
 }
+#player1-hand::after { right: 0; }  /* your deck RIGHT  */
+#player2-hand::before { left: 0; }  /* opponent deck LEFT */
 
-#player1-hand::after {  right: 0; } /* player deck at RIGHT */
-#player2-hand::before { left:  0; } /* opponent deck at LEFT */
-
-/* Discard pile placeholders (mirrored to opposite sides) */
+/* Discard pile placeholders (mirrored) */
 #player1-hand::before,
 #player2-hand::after {
   content: "";
@@ -338,13 +331,12 @@ body.mock-mode #duel-ui {
   filter: grayscale(60%);
   opacity: 0.95;
   box-shadow: 0 0 6px rgba(0,0,0,0.6);
-  border: 2px dashed rgba(255,255,255,0.35); /* dashed to distinguish discard */
+  border: 2px dashed rgba(255,255,255,0.35);
   pointer-events: none;
   z-index: 1;
 }
-
-#player1-hand::before { left: 0; }  /* player discard at LEFT  */
-#player2-hand::after  { right: 0; } /* opponent discard at RIGHT */
+#player1-hand::before { left: 0; }   /* your discard LEFT  */
+#player2-hand::after  { right: 0; }  /* opponent discard RIGHT */
 
 /* Control bar */
 #controls {
@@ -415,11 +407,10 @@ body.mock-mode #duel-ui {
 }
 .hidden { display: none; }
 
-/* --- Helpers added (non-breaking) --- */
+/* --- Helpers (non-breaking) --- */
 .card.clickable { cursor: pointer; }
 .card.spectator { pointer-events: none; opacity: 0.8; }
 
-/* Optional placeholder (used only if you enable it in JS) */
 .card.slot-placeholder {
   width: 100px;
   height: 140px;
@@ -429,13 +420,13 @@ body.mock-mode #duel-ui {
 }
 
 /* =========================
-   DUEL-READY GATING (new)
+   DUEL-READY GATING
    ========================= */
 
 /* Always hide the Draw button (feature removed) */
 #drawBtn { display: none !important; }
 
-/* Hide hands/fields + end button until the app marks the page duel-ready */
+/* Hide zones + end button until duel-ready */
 body:not(.duel-ready) #player1-hand,
 body:not(.duel-ready) #player2-hand,
 body:not(.duel-ready) #player1-field,
@@ -444,36 +435,28 @@ body:not(.duel-ready) #endTurnBtn {
   display: none !important;
 }
 
-/* Once ready, reveal zones/buttons (restore intended layouts) */
+/* Reveal when ready */
 body.duel-ready #player1-hand,
-body.duel-ready #player2-hand {
-  display: flex !important;
-}
+body.duel-ready #player2-hand { display: flex !important; }
 body.duel-ready #player1-field,
-body.duel-ready #player2-field {
-  display: grid !important;
-}
-body.duel-ready #endTurnBtn {
-  display: inline-block !important;
-}
+body.duel-ready #player2-field { display: grid !important; }
+body.duel-ready #endTurnBtn { display: inline-block !important; }
 
-/* After start, lock the control bar to bottom center (end turn only) */
+/* Keep End Turn bottom-center */
 body.duel-ready #controls {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: max(56px, env(safe-area-inset-bottom)); /* keep above Return-to-Hub */
+  bottom: max(56px, env(safe-area-inset-bottom));
   margin: 0;
   z-index: 9000;
   background: transparent;
 }
 
-/* Optionally auto-hide the Start button after we're ready (JS also hides it) */
-body.duel-ready #startPracticeBtn {
-  display: none !important;
-}
+/* Hide Start once ready */
+body.duel-ready #startPracticeBtn { display: none !important; }
 
-/* --- Return-to-Hub: harden styles + placement (override) --- */
+/* Return-to-Hub button */
 a.return-to-hub,
 a.return-to-hub:link,
 a.return-to-hub:visited {
@@ -481,7 +464,7 @@ a.return-to-hub:visited {
   bottom: max(20px, env(safe-area-inset-bottom)) !important;
   right:  max(20px, env(safe-area-inset-right))  !important;
   display: inline-block !important;
-  background-color: rgba(0, 128, 128, 0.9) !important; /* teal */
+  background-color: rgba(0, 128, 128, 0.9) !important;
   color: #fff !important;
   padding: 12px 20px !important;
   font-size: 16px !important;
@@ -490,7 +473,7 @@ a.return-to-hub:visited {
   border: 2px solid #fff !important;
   text-decoration: none !important;
   cursor: pointer !important;
-  z-index: 10000 !important; /* above overlays/animations */
+  z-index: 10000 !important;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.15) !important;
 }
 
@@ -500,7 +483,7 @@ a.return-to-hub:hover {
   box-shadow: 0 0 10px #00ffff !important;
 }
 
-/* ------- Card action picker & highlights ------- */
+/* Card action picker & highlights */
 .card.hovering { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: 2px; }
 .card.selected { box-shadow: 0 0 16px rgba(250, 204, 21, 0.9); }
 
