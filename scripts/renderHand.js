@@ -102,6 +102,7 @@ function setDiscardCount(player, n) {
  * Render the hand for a given player.
  * - When `isSpectator` is true, clicks are disabled.
  * - Opponent (player2) hand is auto face-down for non-spectators.
+ * - Your (player1) hand is ALWAYS face-up (traps show fronts in hand).
  * - Accepts card entries as objects ({cardId,isFaceDown}) or raw ids.
  * - Adds data-* attributes for easier debugging/inspection.
  */
@@ -138,11 +139,8 @@ export function renderHand(player, isSpectator = false) {
         ? (entry.cardId ?? entry.id ?? entry.card_id ?? '000')
         : entry;
 
-    // If we're hiding, force face-down regardless of entry flag
-    const isFaceDown =
-      hideHand
-        ? true
-        : (typeof entry === 'object' && entry !== null ? Boolean(entry.isFaceDown) : false);
+    // ✅ Your hand is always face-up; opponent's is always face-down (unless spectator)
+    const isFaceDown = hideHand ? true : false;
 
     const cardIdStr = asIdString(rawId);
     const el = renderCard(cardIdStr, isFaceDown);
