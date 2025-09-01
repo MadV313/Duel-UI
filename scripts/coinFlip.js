@@ -33,7 +33,7 @@ export function flipCoin(forceWinner = null, opts = {}) {
     duration = 2600,
     announce = true,
     revealAt,
-    renderAfter = false, // ⬅️ keep false; loadPracticeDuel reveals after awaiting this promise
+    renderAfter = false,
   } = opts;
 
   // If a flip is already running, don't start another; just resolve to current.
@@ -62,17 +62,51 @@ export function flipCoin(forceWinner = null, opts = {}) {
       : `🪙 Tails! ${p2Name} goes first!`;
 
   // Elements
-  const overlay = document.getElementById('announcement');
-  const gif = document.getElementById('coinFlipContainer');
-  const turnEl = document.getElementById('turn-display');
+  const overlay = document.getElementById('announcement');           // toast box
+  const container = document.getElementById('coinFlipContainer');    // outer wrapper
+  const turnEl = document.getElementById('turn-display');            // center banner
+  const imgEl = container?.querySelector('.coin-flip-image');        // gif inside
 
-  // Helper: reveal the "Turn: X" banner in a way that survives inline style="display:none"
+  // Helper: ensure the image has a valid src; try fallback if first path fails.
+  function ensureCoinGif() {
+    if (!imgEl) return;
+
+    const primary = imgEl.getAttribute('src') || '';
+    const candidates = [
+      primary,                                // whatever index.html set
+      'images/effects/coinflip.gif',          // common location with snowfall
+      'images/coinflip.gif',                  // simple images folder
+    ].filter(Boolean);
+
+    let tried = 0;
+
+    function tryNext() {
+      if (tried >= candidates.length) return; // nothing else to try
+      const next = candidates[tried++];
+      if (!next) return;
+      // Only reassign if different, to avoid loops
+      if (imgEl.src.endsWith(next)) return;
+
+      // Assign and hook one-time error to try the next candidate
+      imgEl.onerror = () => {
+        // suppress default broken image icon logs
+        imgEl.onerror = null;
+        tryNext();
+      };
+      imgEl.src = next;
+    }
+
+    tryNext();
+  }
+
+  // Helper: reveal the "Turn: X — Name" banner in a way that survives inline display:none
   function showTurnBanner() {
     if (!turnEl) return;
-    turnEl.textContent = `Turn: ${decided === 'player1' ? p1Name : p2Name}`;
+    const label = decided === 'player1' ? 'Challenger' : 'Opponent';
+    const name = decided === 'player1' ? p1Name : p2Name;
+    turnEl.textContent = `Turn: ${label} — ${name}`;
     turnEl.classList.remove('hidden');
-    // Some pages start with style="display:none"; clear it explicitly:
-    turnEl.style.removeProperty('display');
+    turnEl.style.removeProperty('display'); // some pages start with display:none
   }
 
   // Always start with the banner hidden until reveal moment
@@ -92,9 +126,12 @@ export function flipCoin(forceWinner = null, opts = {}) {
 
   // Stage 1: force the flip UI visible and guarantee a paint before timers start
   try {
-    if (gif) {
-      gif.style.display = 'block';
-      gif.style.visibility = 'visible';
+    if (container) {
+      // Make sure container can center content even if CSS was missing
+      container.style.display = 'flex';
+      container.style.alignItems = 'center';
+      container.style.justifyContent = 'center';
+      container.style.visibility = 'visible';
     }
     if (overlay) {
       if (announce) overlay.textContent = '🪙 Flipping…';
@@ -102,8 +139,8 @@ export function flipCoin(forceWinner = null, opts = {}) {
       overlay.style.removeProperty('display');
       overlay.style.visibility = 'visible';
     }
-    // Kick a quick animation pulse (visual flair)
-    triggerAnimation('combo');
+    ensureCoinGif();                  // make sure an image path is valid
+    triggerAnimation?.('combo');      // small flair; safe if undefined
 
     // Force a reflow so browsers actually paint before we schedule the reveal
     // (prevents the "skip" feel on some devices)
@@ -127,7 +164,10 @@ export function flipCoin(forceWinner = null, opts = {}) {
     const endTimer = setTimeout(() => {
       try {
         if (overlay) overlay.classList.add('hidden');
-        if (gif) gif.style.display = 'none';
+        if (container) {
+          container.style.display = 'none';
+          container.style.visibility = 'hidden';
+        }
         if (renderAfter) renderDuelUI();
       } finally {
         coinFlipInProgress = false;
@@ -136,10 +176,14 @@ export function flipCoin(forceWinner = null, opts = {}) {
     }, safeDuration);
 
     // (Defensive) If the page is being torn down, clear timers
-    window.addEventListener('beforeunload', () => {
-      clearTimeout(revealTimer);
-      clearTimeout(endTimer);
-      coinFlipInProgress = false;
-    }, { once: true });
+    window.addEventListener(
+      'beforeunload',
+      () => {
+        clearTimeout(revealTimer);
+        clearTimeout(endTimer);
+        coinFlipInProgress = false;
+      },
+      { once: true }
+    );
   });
 }
