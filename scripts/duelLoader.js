@@ -21,18 +21,25 @@ function normalizeServerState(data) {
   }
   if (data?.currentPlayer === 'bot') data.currentPlayer = 'player2';
 
-  // Make sure required containers exist
-  data.players.player1.hand       ??= [];
-  data.players.player1.field      ??= [];
-  data.players.player1.discardPile??= [];
-  data.players.player2.hand       ??= [];
-  data.players.player2.field      ??= [];
-  data.players.player2.discardPile??= [];
+  // Ensure players + containers exist
+  data.players              ||= {};
+  data.players.player1      ||= {};
+  data.players.player2      ||= {};
 
-  // If practice and server didn't label player1, show something friendly
+  data.players.player1.hand        ||= [];
+  data.players.player1.field       ||= [];
+  data.players.player1.deck        ||= [];
+  data.players.player1.discardPile ||= [];
+
+  data.players.player2.hand        ||= [];
+  data.players.player2.field       ||= [];
+  data.players.player2.deck        ||= [];
+  data.players.player2.discardPile ||= [];
+
+  // Friendly labels for practice if server omitted them
   if (mode === 'practice') {
-    data.players.player1.discordName ||= 'You';
-    data.players.player2.discordName ||= data.players.player2.name || 'Practice Bot';
+    data.players.player1.discordName ||= data.players.player1.discordName || data.players.player1.name || 'You';
+    data.players.player2.discordName ||= data.players.player2.discordName || data.players.player2.name || 'Practice Bot';
   }
 
   return data;
@@ -45,7 +52,7 @@ async function loadPractice() {
   // If the state isn't available, you can optionally try to initialize here
   if (!res || !res.ok) {
     // Optional: start a new practice duel from the UI if none exists
-    // Comment these two lines out if you want to force init only from Discord:
+    // (Left commented to keep Discord as the initializer)
 /*
     await fetch(apiUrl('/duel/practice')).catch(() => null);
     res = await fetch(apiUrl('/duel/state')).catch(() => null);
@@ -63,8 +70,11 @@ async function loadPractice() {
     return;
   }
 
+  // Hydrate UI state but DO NOT start or render yet — Start button/coin flip owns the reveal.
   Object.assign(duelState, data);
-  renderDuelUI();
+  duelState.started = false; // gate UI until the user presses "Start Practice Duel"
+  try { document.body.classList.remove('duel-ready'); } catch {}
+  console.log('[duelLoader] Practice state hydrated; waiting for Start button to run coin flip.');
 }
 
 async function loadPvp(p1, p2) {
@@ -88,6 +98,8 @@ async function loadPvp(p1, p2) {
   }
 
   Object.assign(duelState, data);
+
+  // PvP links still auto-render (no Start button flow here)
   renderDuelUI();
 }
 
