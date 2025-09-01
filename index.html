@@ -40,9 +40,6 @@
 
   <!-- Player 2 (Opponent) -->
   <div id="player2-hand" class="hand hand--top"></div>
-  <!-- ⬇️ Counter is now pinned just under the opponent’s discard pile (top-right) -->
-  <div id="player2-discard-counter" class="discard-counter discard-counter--top">Discard: 0</div>
-
   <div id="player2-field" class="field"></div>
 
   <!-- HP & Turn Info -->
@@ -56,8 +53,6 @@
   <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
   <div id="player1-hand" class="hand hand--bottom"></div>
-  <!-- ⬇️ Counter is now pinned just under the player’s discard pile (bottom-left) -->
-  <div id="player1-discard-counter" class="discard-counter discard-counter--bottom">Discard: 0</div>
 
   <!-- Controls -->
   <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
@@ -76,6 +71,14 @@
       <img class="coin-flip-image" src="images/effects/coin_flip.gif" alt="Coin Flip" />
       <div class="coin-flip-result" aria-hidden="true"></div>
     </div>
+  </div>
+
+  <!-- 🔒 Anchored discard counters (don’t drift with hand width) -->
+  <div class="discard-anchor discard-anchor--top">
+    <div id="player2-discard-counter" class="discard-counter">Discard: 0</div>
+  </div>
+  <div class="discard-anchor discard-anchor--bottom">
+    <div id="player1-discard-counter" class="discard-counter">Discard: 0</div>
   </div>
 
   <a href="https://madv313.github.io/HUB-UI/" class="return-to-hub">← Return to Hub</a>
@@ -143,12 +146,11 @@
             startBtn.disabled = true;
             startBtn.textContent = 'Initializing...';
 
-            // ⚠️ Important: loadPracticeDuel() already performs the coin flip
-            // and reveals the zones/buttons. Do NOT call flipCoin again here.
+            // ⚠️ loadPracticeDuel() already performs the coin flip & reveals UI
             await loadPracticeDuel();
 
             startBtn.textContent = '✅ Practice Ready';
-            startBtn.style.display = 'none'; // hide the button after start
+            startBtn.style.display = 'none';
           } catch (e) {
             console.error('❌ Start failed:', e);
             startBtn.disabled = false;
