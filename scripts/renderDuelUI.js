@@ -117,7 +117,11 @@ function shouldAutoDiscard(meta) {
     /discard\s+this\s+card\s+(?:after|upon)\s+use/,
     /discard\s+after\s+use/,
     /use:\s*discard\s+this\s+card/,
-    /then\s+discard\s+this\s+card/
+    /then\s+discard\s+this\s+card/,
+    /discard\s+with\s+no\s+effect/,
+    /discard\s+when\s+used/,
+    /discard\s+upon\s+activation/,
+    /immediately\s+discard/
   ];
   return patterns.some(rx => rx.test(effect) || rx.test(logic));
 }
@@ -263,6 +267,7 @@ function resolveBotNonTrapCardsOnce() {
       const meta = getMeta(card.cardId);
       resolveImmediateEffect(meta, 'player2');
 
+      // Discard immediately ONLY if the card explicitly says so
       if (shouldAutoDiscard(meta)) {
         moveFieldCardToDiscard('player2', card);
       } else {
