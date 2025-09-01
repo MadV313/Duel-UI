@@ -7,6 +7,7 @@ body {
   background-color: #000;
   font-family: Arial, sans-serif;
   overflow: hidden;
+  position: relative; /* ⬅️ anchor for absolute UI like counters */
 }
 
 /* Snowfall GIF Overlay */
@@ -301,7 +302,7 @@ body.mock-mode #duel-ui {
      112px 0 0 0 rgba(255,255,255,0.25);
 }
 
-/* Hands: center 3 cards, reserve space for deck + discard */
+/* Hands: center 3–4 cards, reserve space for deck + discard */
 #player1-hand, #player2-hand {
   display: flex !important;
   justify-content: center;
@@ -313,9 +314,8 @@ body.mock-mode #duel-ui {
   max-width: 480px;
   margin-left: auto;
   margin-right: auto;
+  flex-wrap: nowrap;           /* ⬅️ prevent wrapping into discard area */
 }
-
-/* reserve deck & discard space so they never overlap or drift */
 #player1-hand { padding-left: 120px;  padding-right: 120px; }  /* discard LEFT, deck RIGHT  */
 #player2-hand { padding-left: 120px;  padding-right: 120px; }  /* deck LEFT, discard RIGHT */
 
@@ -543,3 +543,33 @@ a.return-to-hub:hover {
   cursor: pointer;
 }
 .card-action-menu button:hover { transform: translateY(-1px); }
+
+/* =========================
+   Anchored Discard Counters
+   ========================= */
+.discard-anchor {
+  position: absolute;
+  width: 140px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 3; /* above snowfall (z=2) */
+}
+
+/* Tweak these 4 values to align under the greyscale piles on your screen */
+.discard-anchor--top {
+  top: 112px;     /* distance from top of page */
+  right: 12.5%;   /* move left/right to sit under top-right discard pile */
+}
+
+.discard-anchor--bottom {
+  bottom: 106px;  /* distance from bottom of page */
+  left: 13.5%;    /* move left/right to sit under bottom-left discard pile */
+}
+
+.discard-counter {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ddd;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  user-select: none;
+}
