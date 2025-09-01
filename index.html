@@ -5,18 +5,6 @@
   <title>DayZ CCG Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
 
-  <!-- tiny helper style for the discard counters shown under each hand -->
-  <style>
-    .discard-counter{
-      margin-top: 6px;
-      font-size: 0.9rem;
-      opacity: 0.85;
-      text-align: center;
-      pointer-events: none;
-      user-select: none;
-    }
-  </style>
-
   <!-- ✅ Make API_BASE available to every script (before modules) -->
   <script>
     // Prefer the UI proxy (/api). Allow ?api=... override for local/dev.
@@ -51,7 +39,10 @@
   <div class="snowfall"></div>
 
   <!-- Player 2 (Opponent) -->
-  <div id="player2-hand" class="hand"></div>
+  <div id="player2-hand" class="hand hand--top"></div>
+  <!-- ⬇️ Counter is now pinned just under the opponent’s discard pile (top-right) -->
+  <div id="player2-discard-counter" class="discard-counter discard-counter--top">Discard: 0</div>
+
   <div id="player2-field" class="field"></div>
 
   <!-- HP & Turn Info -->
@@ -64,7 +55,9 @@
 
   <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
-  <div id="player1-hand" class="hand"></div>
+  <div id="player1-hand" class="hand hand--bottom"></div>
+  <!-- ⬇️ Counter is now pinned just under the player’s discard pile (bottom-left) -->
+  <div id="player1-discard-counter" class="discard-counter discard-counter--bottom">Discard: 0</div>
 
   <!-- Controls -->
   <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
