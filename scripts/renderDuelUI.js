@@ -282,6 +282,12 @@ function setTurnText() {
   const el = document.getElementById('turn-display');
   if (!el) return;
 
+  // Respect the flip gate: don't unhide before the duel starts
+  if (!duelState?.started && !duelState?.winner) {
+    el.classList.add('hidden');
+    return;
+  }
+
   // If an inline style hid this at load time, clear it now so it can show
   el.style.display = '';
 
@@ -455,6 +461,7 @@ async function postBotTurn(payload) {
 async function maybeRunBotTurn() {
   if (botTurnInFlight) return;
   if (isSpectator) return;
+  if (!duelState?.started) return;                 // <-- don't run before flip completes
   if (duelState.currentPlayer !== 'player2') return; // only when it's actually bot's turn
 
   botTurnInFlight = true;
@@ -500,8 +507,14 @@ async function maybeRunBotTurn() {
 
 /* ------------------ main render ------------------ */
 export function renderDuelUI() {
-  // Ensure zones/buttons are allowed to show (CSS gate)
-  document.body.classList.add('duel-ready');
+  // Gate UI reveal strictly by duelState.started (prevents skipping past coin flip)
+  try {
+    if (duelState?.started) {
+      document.body.classList.add('duel-ready');
+    } else {
+      document.body.classList.remove('duel-ready');
+    }
+  } catch {}
 
   // Defensive clamp before any draw / effects
   clampFields(duelState);
