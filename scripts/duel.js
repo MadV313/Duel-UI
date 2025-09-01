@@ -754,7 +754,7 @@ export async function endTurn() {
     startTurnIfNeeded();
 
     triggerAnimation('turn');
-    renderDuelUI(); // bot turn will be kicked from renderDuelUI
+    renderDuelUI()(); // bot turn will be kicked from renderDuelUI
   } finally {
     setControlsDisabled(false);
   }
