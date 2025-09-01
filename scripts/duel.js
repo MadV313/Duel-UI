@@ -27,6 +27,17 @@ function isTrapMeta(meta) {
   return t === 'trap' || hasTag(meta, 'trap');
 }
 
+// Persistent vs ephemeral on field
+function isPersistentOnField(meta) {
+  if (!meta) return false;
+  const t = txt(meta.type);
+  if (t === 'defense') return true;           // gear/armor stays
+  if (t === 'trap') return true;              // traps stay set
+  const tags = tagset(meta);                  // allow opt-in persistence
+  if (tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor')) return true;
+  return false;                               // Attack/Loot/Tactical/Infected default to ephemeral
+}
+
 // Debounce control buttons during async / heavy ops
 function setControlsDisabled(disabled) {
   const buttons = [
@@ -126,7 +137,7 @@ const has = t => meta => hasTag(meta, t);
 
 /* ---------- discard helpers ---------- */
 
-/** Returns true if played card should be discarded after resolving. */
+/** Returns true if played card should be discarded immediately after resolving. */
 function shouldAutoDiscard(meta) {
   if (!meta) return false;
 
@@ -143,15 +154,11 @@ function shouldAutoDiscard(meta) {
     /discard\s+with\s+no\s+effect/,
     /discard\s+when\s+used/,
     /discard\s+upon\s+activation/,
+    /immediately\s+discard/
   ];
   if (phrases.some(rx => rx.test(effect) || rx.test(logic))) return true;
 
-  // Heuristic: many Attack/Loot/Tactical/Infected in your JSON explicitly say discard after use.
-  // We don't auto-discard Defense unless text says so.
-  const type = txt(meta.type);
-  if (type !== 'defense' && (effect.includes('discard this card') || logic.includes('discard this card'))) {
-    return true;
-  }
+  // DO NOT auto-discard just because it's not defense; we now prefer end-of-turn cleanup.
   return false;
 }
 
@@ -338,12 +345,10 @@ function resolveImmediateEffect(meta, ownerKey) {
   const type  = txt(meta.type);
 
   // ---------- DAMAGE ----------
-  // 10x2 style
   const pair = parseNumberPairTimes(etext);
   if (pair) {
     damageFoe(foe, you, meta, pair);
   } else {
-    // deal X DMG
     const mD = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
     if (mD) damageFoe(foe, you, meta, Number(mD[1]));
   }
@@ -485,7 +490,7 @@ function resolveImmediateEffect(meta, ownerKey) {
     drawFromDiscard(you, m => txt(m.type) === 'loot');
   }
 
-  // ---------- INFECTED-SPECIFIC (when the card itself is infected) ----------
+  // ---------- INFECTED-SPECIFIC ----------
   if (type === 'infected') {
     if (/deal[s]?\s+(\d+)\s*dmg/.test(etext)) {
       const dm = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
@@ -509,7 +514,6 @@ function resolveImmediateEffect(meta, ownerKey) {
         if (!pool.length) return false;
         const pick = pool[Math.floor(Math.random()*pool.length)];
         const card = takeFn(pick.i);
-        // resolve spawned infected immediately
         const entry = toEntry(card, you === 'player2');
         resolveImmediateEffect(getMeta(entry.cardId), you);
         return true;
@@ -534,7 +538,6 @@ function resolveImmediateEffect(meta, ownerKey) {
 
   // ---------- TRAPS that auto-trigger on play ----------
   if (isTrapMeta(meta) && trapAutoTriggersNow(meta)) {
-    // Effects above already applied; mark for discard after activation.
     duelState.players[you].buffs._forceDiscardPlayedTrap = true;
   }
 }
@@ -580,6 +583,30 @@ export function startTurnIfNeeded() {
   return true;
 }
 
+/* ---------- end-of-turn cleanup ---------- */
+
+function cleanupEndOfTurn(playerKey) {
+  const P = duelState.players[playerKey];
+  ensureZones(P);
+  if (!Array.isArray(P.field) || !P.field.length) return;
+
+  // Keep traps & defenses (and anything explicitly marked persistent/equip/gear/armor)
+  // Discard ephemeral (attack/loot/tactical/infected) unless already removed.
+  const keep = [];
+  const toss = [];
+  for (const card of P.field) {
+    const meta = getMeta(typeof card === 'object' ? card.cardId : card);
+    if (isPersistentOnField(meta)) keep.push(card);
+    else toss.push(card);
+  }
+
+  if (toss.length) {
+    P.discardPile.push(...toss);
+    triggerAnimation('combo'); // subtle feedback
+  }
+  P.field = keep;
+}
+
 /* ---------- public actions ---------- */
 
 /** Manual Draw button (still available in mock or debug) */
@@ -592,7 +619,8 @@ export function drawCard() {
  * Play a card from the current player's hand to their field.
  * - Interactive plays allowed only for local human (player1)
  * - Field has 3 slots (UI guard)
- * - Traps stay face-down; others resolve immediately and may auto-discard
+ * - Traps stay face-down; others resolve immediately
+ * - NO auto-discard on play anymore (except explicit immediate/auto-trigger cases)
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -626,7 +654,7 @@ export function playCard(cardIndex) {
   const meta = getMeta(card.cardId);
   const trap = isTrapMeta(meta);
 
-  // Place on field (traps face-down, others face-up for a moment)
+  // Place on field (traps face-down, others face-up)
   card.isFaceDown = trap ? true : false;
   player.field.push(card);
 
@@ -647,10 +675,10 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // Non-traps resolve immediately
+  // Non-traps resolve immediately, but DO NOT auto-discard on play by default
   resolveImmediateEffect(meta, playerKey);
 
-  // Auto-discard if the text/tags say so
+  // Only if the card explicitly says "discard after use / upon activation" do we remove now
   if (shouldAutoDiscard(meta)) {
     moveFieldCardToDiscard(playerKey, card);
   }
@@ -684,37 +712,43 @@ export function discardCard(cardIndex) {
 
 /**
  * End your turn.
- * Swap players → reset start-of-turn flags → startTurnIfNeeded for the NEW player
- * → apply start-of-turn effects → render.
- * (If it's the bot's turn, renderDuelUI will be responsible for kicking the backend.)
+ * Cleanup ephemeral field cards for the player who ended → swap players
+ * → reset start-of-turn flags → handle skip → startTurnIfNeeded for the NEW player → render.
  */
 export async function endTurn() {
   try {
     setControlsDisabled(true);
 
-    // Swap turn locally
-    duelState.currentPlayer =
-      duelState.currentPlayer === 'player1' ? 'player2' : 'player1';
+    // Player who is ending turn (cleanup applies to them)
+    const ending = duelState.currentPlayer;
+    const E = duelState.players[ending];
+    ensureZones(E);
 
-    const active = duelState.currentPlayer;
-    const A = duelState.players[active];
-    ensureZones(A);
+    // Discard ephemeral field cards at end of THIS player's turn
+    cleanupEndOfTurn(ending);
+
+    // Now pass the turn
+    const next = ending === 'player1' ? 'player2' : 'player1';
+    duelState.currentPlayer = next;
 
     // Reset start-of-turn flags so the new active can draw once
     duelState._startDrawDoneFor = { player1: false, player2: false };
 
-    // Skip entire turn if flagged (kept same behavior as before)
+    // Handle skip for the NEW active player
+    const A = duelState.players[next];
+    ensureZones(A);
     if (A.buffs.skipNextTurn) {
-      console.log(`[turn] ${active} turn skipped.`);
+      console.log(`[turn] ${next} turn skipped.`);
       A.buffs.skipNextTurn = false;
 
-      // Still tick turn-based buffs/effects for the skipped player
+      // Tick start-of-turn effects for the skipped player
       try { applyStartTurnBuffs(); } catch (e) { console.warn('[endTurn] applyStartTurnBuffs error:', e); }
 
       // Immediately pass back to the other player
-      duelState.currentPlayer = active === 'player1' ? 'player2' : 'player1';
+      const back = next === 'player1' ? 'player2' : 'player1';
+      duelState.currentPlayer = back;
 
-      // Reset flags again for the new active, then start turn
+      // Reset flags again for the now-active player and start their turn
       duelState._startDrawDoneFor = { player1: false, player2: false };
       startTurnIfNeeded();
 
