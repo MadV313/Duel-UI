@@ -5,6 +5,18 @@
   <title>DayZ CCG Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
 
+  <!-- tiny helper style for the discard counters shown under each hand -->
+  <style>
+    .discard-counter{
+      margin-top: 6px;
+      font-size: 0.9rem;
+      opacity: 0.85;
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+
   <!-- ✅ Make API_BASE available to every script (before modules) -->
   <script>
     // Prefer the UI proxy (/api). Allow ?api=... override for local/dev.
