@@ -4,8 +4,35 @@ import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 import { API_BASE, UI_BASE } from './config.js';
 
-// ✅ Import as JSON, not JS
-import allCards from './allCards.json' assert { type: 'json' };
+// --- allCards loader (works everywhere; no import assertions needed)
+let allCards = [];
+let allCardsReady = false;
+let allCardsLoading = null;
+
+async function ensureAllCardsLoaded() {
+  if (allCardsReady) return;
+  if (allCardsLoading) { await allCardsLoading; return; }
+  allCardsLoading = (async () => {
+    try {
+      // try same folder first
+      let res = await fetch('./allCards.json', { cache: 'no-store' });
+      if (!res.ok) {
+        // fallback to /scripts (your prod path in the console log)
+        res = await fetch('/scripts/allCards.json', { cache: 'no-store' });
+      }
+      allCards = await res.json();
+      allCardsReady = true;
+      console.log('[UI] allCards loaded:', Array.isArray(allCards) ? allCards.length : 0);
+    } catch (e) {
+      console.error('[UI] Failed to load allCards.json', e);
+      allCards = [];
+      allCardsReady = true; // prevent infinite retries; UI will still run but with no metadata
+    } finally {
+      allCardsLoading = null;
+    }
+  })();
+  await allCardsLoading;
+}
 
 const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
 
@@ -21,8 +48,9 @@ const MAX_HAND = 4;
 function pad3(id) { return String(id).padStart(3, '0'); }
 
 function getMeta(cardId) {
+  if (!allCardsReady) return null;
   const id = pad3(cardId);
-  return allCards.find(c => c.card_id === id);
+  return allCards.find(c => c.card_id === id) || null;
 }
 
 function tagsOf(meta) {
@@ -43,6 +71,7 @@ function hasTag(meta, ...tags) {
 
 function isTrap(cardId) {
   const m = getMeta(cardId);
+  if (!m) return false; // until metadata is ready, treat as non-trap so bot can still play
   const t = String(m?.type || '').toLowerCase();
   // treat traps as type "trap" OR tag includes "trap"
   return t === 'trap' || hasTag(m, 'trap');
@@ -274,11 +303,6 @@ function triggerOneTrap(defenderKey) {
 }
 
 /* -------------- UI-side effect resolver (bot) -------------- */
-/**
- * Minimal parser that understands a broader set of phrases that appear in allCards.json.
- * Runs for bot's NON-TRAP face-up cards so their effects are visible immediately.
- * ❗ We no longer auto-discard here; end-of-turn will clean up ephemeral cards.
- */
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
 
@@ -307,7 +331,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
-  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (meta) => isType('trap')(meta) || hasTag(meta, 'trap'));
+  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
   // --- discard 1 card from owner's hand (not the "discard after use" clause)
   if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
@@ -468,7 +492,6 @@ function setTurnText() {
   }
 
   const who = duelState.currentPlayer;
-  theLabel:
   {
     const label = who === 'player1' ? 'Challenger' : 'Opponent';
     el.textContent = `Turn: ${label} — ${nameOf(who)}`;
@@ -553,7 +576,6 @@ function toEntry(objOrId, defaultFaceDown = false) {
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
   if (isTrap(base.cardId)) {
-    // If the trap has fired, keep it FACE-UP; otherwise keep FACE-DOWN (still set).
     base.isFaceDown = base._fired ? false : true;
   } else {
     base.isFaceDown = false;
@@ -731,6 +753,9 @@ async function maybeRunBotTurn() {
   if (!duelState?.started) return;                 // <-- don't run before flip completes
   if (duelState.currentPlayer !== 'player2') return; // only when it's actually bot's turn
 
+  // Make sure card metadata is ready before any meta-based decisions
+  await ensureAllCardsLoaded();
+
   botTurnInFlight = true;
   try {
     const payload = normalizeStateForServer(duelState);
@@ -804,7 +829,10 @@ async function maybeRunBotTurn() {
 }
 
 /* ------------------ main render ------------------ */
-export function renderDuelUI() {
+export async function renderDuelUI() {
+  // Make sure card metadata is loaded before we start doing meta lookups
+  await ensureAllCardsLoaded();
+
   // Gate UI reveal strictly by duelState.started (prevents skipping past coin flip)
   try {
     if (duelState?.started) {
