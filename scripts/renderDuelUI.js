@@ -357,7 +357,7 @@ function botAutoPlayAssist() {
   const playOne = (entry, faceDown) => {
     // remove from hand (first matching index)
     const idx = bot.hand.findIndex(h => (h.cardId ?? h) === (entry.cardId ?? entry));
-    if (idx === -1) return false;
+    if (idx === -1 || !fieldHasRoom()) return false;
     const [card] = bot.hand.splice(idx, 1);
 
     const cid = (typeof card === 'object' && card !== null) ? (card.cardId ?? card.id ?? card.card_id) : card;
@@ -433,8 +433,11 @@ function setTurnText() {
   }
 
   const who = duelState.currentPlayer;
-  const label = who === 'player1' ? 'Challenger' : 'Opponent';
-  el.textContent = `Turn: ${label} — ${nameOf(who)}`;
+  theLabel:
+  {
+    const label = who === 'player1' ? 'Challenger' : 'Opponent';
+    el.textContent = `Turn: ${label} — ${nameOf(who)}`;
+  }
   el.classList.remove('hidden');
 }
 
@@ -498,18 +501,28 @@ function updateDiscardCounters() {
 /* ------------------ state normalizers ------------------ */
 function asIdString(id) { return pad3(id); }
 
+// 🔒 Preserve `_fired` when normalizing, so fired traps remain face-UP until cleanup.
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: asIdString(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown) };
+    return {
+      cardId: asIdString(cid),
+      isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown),
+      _fired: Boolean(objOrId._fired || false),
+    };
   }
-  return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown) };
+  return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown), _fired: false };
 }
 
-// Field entries: non-traps must be face-UP; traps face-DOWN (UI guarantee)
+// Field entries: non-traps must be face-UP; traps face-DOWN *unless they have fired*.
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
-  base.isFaceDown = isTrap(base.cardId) ? true : false;
+  if (isTrap(base.cardId)) {
+    // If the trap has fired, keep it FACE-UP; otherwise keep FACE-DOWN (still set).
+    base.isFaceDown = base._fired ? false : true;
+  } else {
+    base.isFaceDown = false;
+  }
   return base;
 }
 
@@ -566,7 +579,7 @@ function mergeServerIntoUI(server) {
     P.hp = Math.max(0, Math.min(MAX_HP, Number(P.hp ?? MAX_HP)));
 
     P.hand = Array.isArray(P.hand) ? P.hand.map(e => toEntry(e, pk === 'player2')) : [];
-    // Force non-traps face-up on field; traps face-down
+    // ✅ Preserve trap face-state: fired traps stay face-UP; unfired traps stay face-DOWN.
     P.field = Array.isArray(P.field) ? P.field.map(toFieldEntry) : [];
     P.deck = Array.isArray(P.deck) ? P.deck.map(e => toEntry(e, false)) : [];
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
