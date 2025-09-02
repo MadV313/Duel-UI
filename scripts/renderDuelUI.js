@@ -182,7 +182,7 @@ function isPersistentOnField(meta) {
   if (!meta) return false;
   const t = String(meta.type || '').toLowerCase();
   if (t === 'defense') return true;
-  if (t === 'trap') return true;
+  if (t === 'trap') return true; // traps stay set until they fire
   const tags = new Set(tagsOf(meta));
   return tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor');
 }
@@ -196,8 +196,15 @@ function cleanupEndOfTurnLocal(playerKey) {
   const toss = [];
   for (const card of P.field) {
     const meta = getMeta(typeof card === 'object' ? card.cardId : card);
-    if (isPersistentOnField(meta)) keep.push(card);
-    else toss.push(card);
+    if (isTrap(card.cardId)) {
+      // 🔁 NEW: fired traps (_fired) leave at end of turn; unfired traps stay set
+      if (card._fired) toss.push(card);
+      else keep.push(card);
+    } else if (isPersistentOnField(meta)) {
+      keep.push(card);
+    } else {
+      toss.push(card);
+    }
   }
   if (toss.length) {
     P.discardPile.push(...toss);
@@ -206,7 +213,11 @@ function cleanupEndOfTurnLocal(playerKey) {
 }
 
 /* ---------- Trap activation (UI side, for bot plays) ---------- */
-/** Flip + resolve the first facedown trap on defender, then discard it. */
+/**
+ * Flip + resolve the first facedown trap on defender.
+ * It will remain on the field, face-up, until the end of that defender's turn,
+ * at which time cleanup discards it (because we mark `_fired = true` here).
+ */
 function triggerOneTrap(defenderKey) {
   const D = duelState.players[defenderKey];
   if (!D) return false;
@@ -217,13 +228,13 @@ function triggerOneTrap(defenderKey) {
 
   const trap = D.field[idx];
   trap.isFaceDown = false; // reveal
+  trap._fired = true;      // mark so end-of-turn cleanup will remove it
   const meta = getMeta(trap.cardId);
 
   // Apply trap for defender (its owner)
   resolveImmediateEffect(meta, defenderKey);
 
-  // Traps leave after firing
-  moveFieldCardToDiscard(defenderKey, trap);
+  // ❌ Do NOT discard here — it lingers until End Turn.
   return true;
 }
 
@@ -304,7 +315,7 @@ function resolveImmediateEffect(meta, ownerKey) {
     revealRandomEnemyTrap(foe);
   }
 
-  // ✅ NEW: if this resolved card is Attack or Infected, trigger exactly one facedown trap on the defender
+  // ✅ If this resolved card is Attack or Infected, trigger exactly one facedown trap on the defender
   if (type === 'attack' || type === 'infected') {
     triggerOneTrap(foe);
   }
@@ -629,7 +640,7 @@ async function maybeRunBotTurn() {
   } catch (err) {
     console.error('[UI] Bot move error:', err);
   } finally {
-    // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemeral).
+    // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemerals + fired traps).
     if (duelState.currentPlayer === 'player1') {
       cleanupEndOfTurnLocal('player2');
     }
