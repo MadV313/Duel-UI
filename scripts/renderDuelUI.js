@@ -3,7 +3,9 @@ import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 import { API_BASE, UI_BASE } from './config.js';
-import allCards from './allCards.js';
+
+// ✅ Import as JSON, not JS
+import allCards from './allCards.json' assert { type: 'json' };
 
 const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
 
