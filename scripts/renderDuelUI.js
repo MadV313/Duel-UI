@@ -539,6 +539,40 @@ function normalizePlayerForServer(p) {
   };
 }
 
+/** Carry fired-trap flags from the current UI state into the server's reply. */
+function carryFiredTrapFlags(prev, next) {
+  try {
+    ['player1', 'player2'].forEach(pk => {
+      const prevFired = (prev?.players?.[pk]?.field || [])
+        .map(toEntry)
+        .filter(e => isTrap(e.cardId) && e._fired)
+        .map(e => e.cardId);
+
+      if (!prevFired.length) return;
+
+      const pool = (next?.players?.[pk]?.field || []).map(toEntry);
+      // Greedy match by cardId (handles multiples reasonably)
+      const need = [...prevFired];
+      for (const card of pool) {
+        if (!need.length) break;
+        if (isTrap(card.cardId) && !card._fired) {
+          const hitIdx = need.indexOf(card.cardId);
+          if (hitIdx !== -1) {
+            card._fired = true;
+            card.isFaceDown = false; // once fired, show face-up
+            need.splice(hitIdx, 1);
+          }
+        }
+      }
+      // write back
+      if (next?.players?.[pk]?.field) {
+        next.players[pk].field = pool;
+      }
+    });
+  } catch {}
+  return next;
+}
+
 // Map UI state (player2) -> backend expectation (bot)
 function normalizeStateForServer(state) {
   // Clamp fields before sending (prevents backend from getting >3 UI-induced)
@@ -558,9 +592,12 @@ function normalizeStateForServer(state) {
 function mergeServerIntoUI(server) {
   if (!server || typeof server !== 'object') return;
 
-  const next = typeof structuredClone === 'function'
+  // Start with server snapshot and graft on our local fired-trap flags
+  let next = typeof structuredClone === 'function'
     ? structuredClone(server)
     : JSON.parse(JSON.stringify(server));
+
+  next = carryFiredTrapFlags(duelState, next);
 
   // Convert bot key back to player2
   if (next?.players?.bot) {
