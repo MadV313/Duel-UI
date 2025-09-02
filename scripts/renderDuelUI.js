@@ -102,7 +102,6 @@ function drawFromDeckWhere(playerKey, predicate) {
 }
 
 const isType  = t => meta => String(meta?.type || '').toLowerCase() === t;
-const hasTagP = t => meta => hasTag(meta, t);
 
 /* ---------------- discard / resolve helpers ---------------- */
 function shouldAutoDiscard(meta) {
@@ -197,7 +196,7 @@ function cleanupEndOfTurnLocal(playerKey) {
   for (const card of P.field) {
     const meta = getMeta(typeof card === 'object' ? card.cardId : card);
     if (isTrap(card.cardId)) {
-      // 🔁 NEW: fired traps (_fired) leave at end of turn; unfired traps stay set
+      // fired traps (_fired) leave at end of their owner's turn; unfired traps stay armed
       if (card._fired) toss.push(card);
       else keep.push(card);
     } else if (isPersistentOnField(meta)) {
@@ -272,7 +271,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
-  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (meta) => isType('trap')(meta) || hasTag(meta, 'trap'));
+  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
   // --- discard 1 card from owner's hand (not the "discard after use" clause)
   if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
@@ -431,16 +430,55 @@ function asIdString(id) { return pad3(id); }
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: asIdString(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown) };
+    return {
+      cardId: asIdString(cid),
+      isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown),
+      _fired: Boolean(objOrId._fired)
+    };
   }
   return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown) };
 }
 
-// Field entries: non-traps must be face-UP; traps face-DOWN (UI guarantee)
+// Field entries: non-traps must be face-UP;
+// traps default to face-DOWN, but preserve explicit flags and _fired when present
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
-  base.isFaceDown = isTrap(base.cardId) ? true : false;
+  const trap = isTrap(base.cardId);
+
+  if (trap) {
+    const explicit =
+      (typeof objOrId === 'object' && objOrId !== null && 'isFaceDown' in objOrId)
+        ? Boolean(objOrId.isFaceDown)
+        : undefined;
+    base.isFaceDown = explicit !== undefined ? explicit : true; // armed by default
+    if (typeof objOrId === 'object' && objOrId !== null && '_fired' in objOrId) {
+      base._fired = Boolean(objOrId._fired);
+    }
+  } else {
+    base.isFaceDown = false;
+  }
+
   return base;
+}
+
+/** Preserve local trap reveal state across server merges (index-wise). */
+function preserveLocalTrapReveals(next) {
+  try {
+    const prev = duelState;
+    ['player1', 'player2'].forEach(pk => {
+      const nField = next?.players?.[pk]?.field || [];
+      const pField = prev?.players?.[pk]?.field || [];
+      for (let i = 0; i < Math.min(nField.length, pField.length); i++) {
+        const n = nField[i];
+        const p = pField[i];
+        if (!n || !p) continue;
+        if (n.cardId === p.cardId && isTrap(n.cardId)) {
+          if (p.isFaceDown === false) n.isFaceDown = false; // keep revealed
+          if (p._fired) n._fired = true;                   // keep fired flag
+        }
+      }
+    });
+  } catch {}
 }
 
 function normalizePlayerForServer(p) {
@@ -496,8 +534,10 @@ function mergeServerIntoUI(server) {
     P.hp = Math.max(0, Math.min(MAX_HP, Number(P.hp ?? MAX_HP)));
 
     P.hand = Array.isArray(P.hand) ? P.hand.map(e => toEntry(e, pk === 'player2')) : [];
-    // Force non-traps face-up on field; traps face-down
+
+    // Force non-traps face-up; traps preserve explicit flags or default to face-down
     P.field = Array.isArray(P.field) ? P.field.map(toFieldEntry) : [];
+
     P.deck = Array.isArray(P.deck) ? P.deck.map(e => toEntry(e, false)) : [];
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
 
@@ -506,6 +546,9 @@ function mergeServerIntoUI(server) {
       P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
     }
   });
+
+  // Preserve any local trap reveal/fired state so merges don't re-hide them
+  preserveLocalTrapReveals(next);
 
   // Enforce UI caps (don’t let >3 render)
   clampFields(next);
