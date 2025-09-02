@@ -102,6 +102,7 @@ function drawFromDeckWhere(playerKey, predicate) {
 }
 
 const isType  = t => meta => String(meta?.type || '').toLowerCase() === t;
+const hasTagP = t => meta => hasTag(meta, t);
 
 /* ---------------- discard / resolve helpers ---------------- */
 function shouldAutoDiscard(meta) {
@@ -196,7 +197,7 @@ function cleanupEndOfTurnLocal(playerKey) {
   for (const card of P.field) {
     const meta = getMeta(typeof card === 'object' ? card.cardId : card);
     if (isTrap(card.cardId)) {
-      // fired traps (_fired) leave at end of their owner's turn; unfired traps stay armed
+      // fired traps (_fired) leave at end of turn; unfired traps stay set
       if (card._fired) toss.push(card);
       else keep.push(card);
     } else if (isPersistentOnField(meta)) {
@@ -271,7 +272,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
-  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
+  if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (meta) => isType('trap')(meta) || hasTag(meta, 'trap'));
 
   // --- discard 1 card from owner's hand (not the "discard after use" clause)
   if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
@@ -334,6 +335,76 @@ function resolveBotNonTrapCardsOnce() {
       card._resolvedByUI = true;
     }
   }
+}
+
+/* ---------------- Bot auto-play assist (client-side safety net) ---------------- */
+/**
+ * If the server didn’t play anything meaningful, we proactively play what we can:
+ * - Prefer non-traps (face-up) until field is full.
+ * - Then set traps (face-down) while space remains.
+ * - Never discard unless absolutely required (not needed under current caps).
+ * Returns true if we played at least one card.
+ */
+function botAutoPlayAssist() {
+  const bot = duelState?.players?.player2;
+  if (!bot) return false;
+  ensureArrays(bot);
+
+  let playedAny = false;
+  const fieldHasRoom = () => Array.isArray(bot.field) && bot.field.length < MAX_FIELD_SLOTS;
+
+  // Helper to play one card object {cardId,isFaceDown?}
+  const playOne = (entry, faceDown) => {
+    // remove from hand (first matching index)
+    const idx = bot.hand.findIndex(h => (h.cardId ?? h) === (entry.cardId ?? entry));
+    if (idx === -1) return false;
+    const [card] = bot.hand.splice(idx, 1);
+
+    const cid = (typeof card === 'object' && card !== null) ? (card.cardId ?? card.id ?? card.card_id) : card;
+    const final = { cardId: pad3(cid), isFaceDown: !!faceDown };
+
+    bot.field.push(final);
+
+    const meta = getMeta(final.cardId);
+
+    if (!final.isFaceDown) {
+      // resolve immediately for visible non-traps
+      resolveImmediateEffect(meta, 'player2');
+      final._resolvedByUI = true;
+
+      // If this was Attack/Infected, trigger one of the human's traps
+      const t = String(meta?.type || '').toLowerCase();
+      if (t === 'attack' || t === 'infected') {
+        triggerOneTrap('player1');
+      }
+    }
+
+    playedAny = true;
+    return true;
+  };
+
+  // 1) Play non-traps first
+  while (fieldHasRoom()) {
+    const i = bot.hand.findIndex(e => {
+      const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
+      return !isTrap(cid);
+    });
+    if (i === -1) break;
+    playOne(bot.hand[i], false);
+  }
+
+  // 2) Then set traps while room remains
+  while (fieldHasRoom()) {
+    const i = bot.hand.findIndex(e => {
+      const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
+      return isTrap(cid);
+    });
+    if (i === -1) break;
+    // set face-down trap
+    playOne(bot.hand[i], true);
+  }
+
+  return playedAny;
 }
 
 /* ------------------ display helpers ------------------ */
@@ -430,55 +501,16 @@ function asIdString(id) { return pad3(id); }
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return {
-      cardId: asIdString(cid),
-      isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown),
-      _fired: Boolean(objOrId._fired)
-    };
+    return { cardId: asIdString(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? defaultFaceDown) };
   }
   return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown) };
 }
 
-// Field entries: non-traps must be face-UP;
-// traps default to face-DOWN, but preserve explicit flags and _fired when present
+// Field entries: non-traps must be face-UP; traps face-DOWN (UI guarantee)
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
-  const trap = isTrap(base.cardId);
-
-  if (trap) {
-    const explicit =
-      (typeof objOrId === 'object' && objOrId !== null && 'isFaceDown' in objOrId)
-        ? Boolean(objOrId.isFaceDown)
-        : undefined;
-    base.isFaceDown = explicit !== undefined ? explicit : true; // armed by default
-    if (typeof objOrId === 'object' && objOrId !== null && '_fired' in objOrId) {
-      base._fired = Boolean(objOrId._fired);
-    }
-  } else {
-    base.isFaceDown = false;
-  }
-
+  base.isFaceDown = isTrap(base.cardId) ? true : false;
   return base;
-}
-
-/** Preserve local trap reveal state across server merges (index-wise). */
-function preserveLocalTrapReveals(next) {
-  try {
-    const prev = duelState;
-    ['player1', 'player2'].forEach(pk => {
-      const nField = next?.players?.[pk]?.field || [];
-      const pField = prev?.players?.[pk]?.field || [];
-      for (let i = 0; i < Math.min(nField.length, pField.length); i++) {
-        const n = nField[i];
-        const p = pField[i];
-        if (!n || !p) continue;
-        if (n.cardId === p.cardId && isTrap(n.cardId)) {
-          if (p.isFaceDown === false) n.isFaceDown = false; // keep revealed
-          if (p._fired) n._fired = true;                   // keep fired flag
-        }
-      }
-    });
-  } catch {}
 }
 
 function normalizePlayerForServer(p) {
@@ -534,10 +566,8 @@ function mergeServerIntoUI(server) {
     P.hp = Math.max(0, Math.min(MAX_HP, Number(P.hp ?? MAX_HP)));
 
     P.hand = Array.isArray(P.hand) ? P.hand.map(e => toEntry(e, pk === 'player2')) : [];
-
-    // Force non-traps face-up; traps preserve explicit flags or default to face-down
+    // Force non-traps face-up on field; traps face-down
     P.field = Array.isArray(P.field) ? P.field.map(toFieldEntry) : [];
-
     P.deck = Array.isArray(P.deck) ? P.deck.map(e => toEntry(e, false)) : [];
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
 
@@ -546,9 +576,6 @@ function mergeServerIntoUI(server) {
       P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
     }
   });
-
-  // Preserve any local trap reveal/fired state so merges don't re-hide them
-  preserveLocalTrapReveals(next);
 
   // Enforce UI caps (don’t let >3 render)
   clampFields(next);
@@ -673,15 +700,29 @@ async function maybeRunBotTurn() {
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       console.error('[UI] Bot move failed:', res.status, txt);
-      return;
+      // Even if server move failed, try to play locally so the match progresses.
+    } else {
+      const updated = await res.json().catch(() => null);
+      if (updated) {
+        mergeServerIntoUI(updated);
+      }
     }
 
-    const updated = await res.json().catch(() => null);
-    if (updated) {
-      mergeServerIntoUI(updated);
+    // --- Client-side safety net: make the bot play anything it reasonably can.
+    if (duelState.currentPlayer === 'player2') {
+      const played = botAutoPlayAssist();
+      if (played) {
+        // Re-resolve any fresh bot face-up cards (just in case)
+        resolveBotNonTrapCardsOnce();
+      }
     }
   } catch (err) {
     console.error('[UI] Bot move error:', err);
+    // Fallback: still try to make progress locally if it's bot's turn
+    if (duelState.currentPlayer === 'player2') {
+      botAutoPlayAssist();
+      resolveBotNonTrapCardsOnce();
+    }
   } finally {
     // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemerals + fired traps).
     if (duelState.currentPlayer === 'player1') {
