@@ -168,6 +168,25 @@ function destroyEnemyInfected(foeKey) {
   return false;
 }
 
+/* ---------- fired trap face-state persistence across merges ---------- */
+duelState._pendingFiredTraps ||= []; // array of { owner:'player1'|'player2', cardId:'###' }
+
+/** Ensure any locally-fired traps stay face-up even after a server merge. */
+function reapplyFiredTrapFaceState() {
+  try {
+    if (!Array.isArray(duelState._pendingFiredTraps)) return;
+    for (const mark of duelState._pendingFiredTraps) {
+      const P = duelState.players?.[mark.owner];
+      if (!P || !Array.isArray(P.field)) continue;
+      const trap = P.field.find(c => c && isTrap(c.cardId) && c.cardId === mark.cardId);
+      if (trap) {
+        trap._fired = true;
+        trap.isFaceDown = false;
+      }
+    }
+  } catch {}
+}
+
 /* --------- utility: parse 10x2 style damage or normal “deal X DMG/DAMAGE” --------- */
 function damageFromText(effectText) {
   const s = String(effectText || '').toLowerCase();
@@ -206,6 +225,17 @@ function cleanupEndOfTurnLocal(playerKey) {
       toss.push(card);
     }
   }
+  // Clear any pending fired markers for this owner if those traps were removed now
+  try {
+    if (Array.isArray(duelState._pendingFiredTraps)) {
+      duelState._pendingFiredTraps = duelState._pendingFiredTraps.filter(m => {
+        // keep marks that are not owned by this player OR still exist on field
+        if (m.owner !== playerKey) return true;
+        return (P.field || []).some(c => c && isTrap(c.cardId) && c.cardId === m.cardId && c._fired);
+      });
+    }
+  } catch {}
+
   if (toss.length) {
     P.discardPile.push(...toss);
   }
@@ -229,6 +259,9 @@ function triggerOneTrap(defenderKey) {
   const trap = D.field[idx];
   trap.isFaceDown = false; // reveal
   trap._fired = true;      // mark so end-of-turn cleanup will remove it
+  // remember so merges keep it face-up
+  duelState._pendingFiredTraps ||= [];
+  duelState._pendingFiredTraps.push({ owner: defenderKey, cardId: trap.cardId });
   const meta = getMeta(trap.cardId);
 
   // Apply trap for defender (its owner)
@@ -539,40 +572,6 @@ function normalizePlayerForServer(p) {
   };
 }
 
-/** Carry fired-trap flags from the current UI state into the server's reply. */
-function carryFiredTrapFlags(prev, next) {
-  try {
-    ['player1', 'player2'].forEach(pk => {
-      const prevFired = (prev?.players?.[pk]?.field || [])
-        .map(toEntry)
-        .filter(e => isTrap(e.cardId) && e._fired)
-        .map(e => e.cardId);
-
-      if (!prevFired.length) return;
-
-      const pool = (next?.players?.[pk]?.field || []).map(toEntry);
-      // Greedy match by cardId (handles multiples reasonably)
-      const need = [...prevFired];
-      for (const card of pool) {
-        if (!need.length) break;
-        if (isTrap(card.cardId) && !card._fired) {
-          const hitIdx = need.indexOf(card.cardId);
-          if (hitIdx !== -1) {
-            card._fired = true;
-            card.isFaceDown = false; // once fired, show face-up
-            need.splice(hitIdx, 1);
-          }
-        }
-      }
-      // write back
-      if (next?.players?.[pk]?.field) {
-        next.players[pk].field = pool;
-      }
-    });
-  } catch {}
-  return next;
-}
-
 // Map UI state (player2) -> backend expectation (bot)
 function normalizeStateForServer(state) {
   // Clamp fields before sending (prevents backend from getting >3 UI-induced)
@@ -592,12 +591,9 @@ function normalizeStateForServer(state) {
 function mergeServerIntoUI(server) {
   if (!server || typeof server !== 'object') return;
 
-  // Start with server snapshot and graft on our local fired-trap flags
-  let next = typeof structuredClone === 'function'
+  const next = typeof structuredClone === 'function'
     ? structuredClone(server)
     : JSON.parse(JSON.stringify(server));
-
-  next = carryFiredTrapFlags(duelState, next);
 
   // Convert bot key back to player2
   if (next?.players?.bot) {
@@ -627,6 +623,8 @@ function mergeServerIntoUI(server) {
     }
   });
 
+  // Re-apply local fired-trap face state across merges
+  reapplyFiredTrapFaceState();
   // Enforce UI caps (don’t let >3 render)
   clampFields(next);
 
@@ -745,6 +743,14 @@ async function maybeRunBotTurn() {
       });
     } catch {}
 
+    // Pre-play assist: ensure the bot actually plays cards before asking server
+    try {
+      const prePlayed = botAutoPlayAssist();
+      if (prePlayed) {
+        resolveBotNonTrapCardsOnce();
+      }
+    } catch (e) { console.warn('[UI] pre-play assist error', e); }
+
     const res = await postBotTurn(payload);
 
     if (!res.ok) {
@@ -811,6 +817,9 @@ export function renderDuelUI() {
 
   // If it's now your turn (e.g., right after a bot merge), ensure you got your start draw.
   startTurnDrawIfNeeded();
+
+  // Keep fired traps face-up even if a merge just happened
+  reapplyFiredTrapFaceState();
 
   // ⚙️ Resolve any new, face-up bot cards (non-traps) once (no auto-discard)
   resolveBotNonTrapCardsOnce();
