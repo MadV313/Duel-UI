@@ -199,14 +199,18 @@ function destroyEnemyInfected(foeKey) {
   return false;
 }
 
-/* ---------- fired trap face-state persistence across merges ---------- */
-duelState._pendingFiredTraps ||= []; // array of { owner:'player1'|'player2', cardId:'###' }
+/* ---------- fired trap face-state persistence (LAZY; no top-level mutation) ---------- */
+function firedTrapMarks() {
+  // Create on first access so we never touch duelState during module initialize
+  duelState._pendingFiredTraps ||= [];
+  return duelState._pendingFiredTraps;
+}
 
 /** Ensure any locally-fired traps stay face-up even after a server merge. */
 function reapplyFiredTrapFaceState() {
   try {
-    if (!Array.isArray(duelState._pendingFiredTraps)) return;
-    for (const mark of duelState._pendingFiredTraps) {
+    const marks = firedTrapMarks();
+    for (const mark of marks) {
       const P = duelState.players?.[mark.owner];
       if (!P || !Array.isArray(P.field)) continue;
       const trap = P.field.find(c => c && isTrap(c.cardId) && c.cardId === mark.cardId);
@@ -258,13 +262,12 @@ function cleanupEndOfTurnLocal(playerKey) {
   }
   // Clear any pending fired markers for this owner if those traps were removed now
   try {
-    if (Array.isArray(duelState._pendingFiredTraps)) {
-      duelState._pendingFiredTraps = duelState._pendingFiredTraps.filter(m => {
-        // keep marks that are not owned by this player OR still exist on field
-        if (m.owner !== playerKey) return true;
-        return (P.field || []).some(c => c && isTrap(c.cardId) && c.cardId === m.cardId && c._fired);
-      });
-    }
+    const marks = firedTrapMarks();
+    duelState._pendingFiredTraps = marks.filter(m => {
+      // keep marks that are not owned by this player OR still exist on field
+      if (m.owner !== playerKey) return true;
+      return (P.field || []).some(c => c && isTrap(c.cardId) && c.cardId === m.cardId && c._fired);
+    });
   } catch {}
 
   if (toss.length) {
@@ -291,8 +294,7 @@ function triggerOneTrap(defenderKey) {
   trap.isFaceDown = false; // reveal
   trap._fired = true;      // mark so end-of-turn cleanup will remove it
   // remember so merges keep it face-up
-  duelState._pendingFiredTraps ||= [];
-  duelState._pendingFiredTraps.push({ owner: defenderKey, cardId: trap.cardId });
+  firedTrapMarks().push({ owner: defenderKey, cardId: trap.cardId });
   const meta = getMeta(trap.cardId);
 
   // Apply trap for defender (its owner)
