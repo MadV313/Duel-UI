@@ -44,6 +44,10 @@ const MAX_FIELD_SLOTS = 3;
 const MAX_HP = 200;
 const MAX_HAND = 4;
 
+// 🔧 SAFETY: never perform UI-side "discard 1 card" from hand.
+// Let the backend or explicit card logic handle actual discards.
+const ENABLE_UI_SIDE_HAND_DISCARD = false;
+
 /* ------------------ small helpers ------------------ */
 function pad3(id) { return String(id).padStart(3, '0'); }
 
@@ -335,8 +339,8 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
   if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
-  // --- discard 1 card from owner's hand (not the "discard after use" clause)
-  if (/\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
+  // --- UI-side hand discard DISABLED by default (prevents bot nuking its hand)
+  if (ENABLE_UI_SIDE_HAND_DISCARD && /\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
     const hand = duelState.players[you].hand;
     if (hand.length) {
       const tossed = hand.pop();
