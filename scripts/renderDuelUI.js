@@ -50,6 +50,11 @@ const MAX_HAND = 4;
 // Let the backend or explicit card logic handle actual discards.
 const ENABLE_UI_SIDE_HAND_DISCARD = false;
 
+// 🎬 Turn pacing (slow-mo)
+const SLOW_MO_MS = 750; // each step ~0.75s, bot turn ~3–4s
+const MIN_TURN_MS = 3200; // enforce minimum visible duration
+const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
+
 /* ------------------ small helpers ------------------ */
 function pad3(id) { return String(id).padStart(3, '0'); }
 
@@ -77,7 +82,7 @@ function hasTag(meta, ...tags) {
 
 function isTrap(cardId) {
   const m = getMeta(cardId);
-  if (!m) return false; // until metadata is ready, treat as non-trap so bot can still play
+  if (!m) return false; // trap-specific handling relies on meta; persistence guard below handles unknown meta
   const t = String(m?.type || '').toLowerCase();
   // treat traps as type "trap" OR tag includes "trap"
   return t === 'trap' || hasTag(m, 'trap');
@@ -239,7 +244,8 @@ function damageFromText(effectText) {
 
 /* ---------- persistence helper (mirror duel.js) ---------- */
 function isPersistentOnField(meta) {
-  if (!meta) return false;
+  // SAFETY: unknown meta should *not* be tossed immediately — keep until we know.
+  if (!meta) return true;
   const t = String(meta.type || '').toLowerCase();
   if (t === 'defense') return true;
   if (t === 'trap') return true; // traps stay set until they fire
@@ -258,11 +264,12 @@ function cleanupEndOfTurnLocal(playerKey) {
     const meta = getMeta(typeof card === 'object' ? card.cardId : card);
     if (isTrap(card.cardId)) {
       // fired traps (_fired) leave at end of turn; unfired traps stay set
-      if (card._fired) toss.push(card);
+      if (card._fired) { card._cleanupReason = 'firedTrap'; toss.push(card); }
       else keep.push(card);
     } else if (isPersistentOnField(meta)) {
       keep.push(card);
     } else {
+      card._cleanupReason = 'notPersistent';
       toss.push(card);
     }
   }
@@ -278,16 +285,14 @@ function cleanupEndOfTurnLocal(playerKey) {
 
   if (toss.length) {
     P.discardPile.push(...toss);
+    try {
+      toss.forEach(c => console.log('[cleanup] moved to discard', { owner: playerKey, id: c.cardId, reason: c._cleanupReason || 'unknown' }));
+    } catch {}
   }
   P.field = keep;
 }
 
 /* ---------- Trap activation (UI side, for bot plays) ---------- */
-/**
- * Flip + resolve the first facedown trap on defender.
- * It will remain on the field, face-up, until the end of that defender's turn,
- * at which time cleanup discards it (because we mark `_fired = true` here).
- */
 function triggerOneTrap(defenderKey) {
   const D = duelState.players[defenderKey];
   if (!D) return false;
@@ -412,7 +417,7 @@ function resolveBotNonTrapCardsOnce() {
  * - Never discard unless absolutely required (not needed under current caps).
  * Returns true if we played at least one card.
  */
-function botAutoPlayAssist() {
+async function botAutoPlayAssist() {
   const bot = duelState?.players?.player2;
   if (!bot) return false;
   ensureArrays(bot);
@@ -421,8 +426,7 @@ function botAutoPlayAssist() {
   const fieldHasRoom = () => Array.isArray(bot.field) && bot.field.length < MAX_FIELD_SLOTS;
 
   // Helper to play one card object {cardId,isFaceDown?}
-  const playOne = (entry, faceDown) => {
-    // remove from hand (first matching index)
+  const playOne = async (entry, faceDown) => {
     const idx = bot.hand.findIndex(h => (h.cardId ?? h) === (entry.cardId ?? entry));
     if (idx === -1 || !fieldHasRoom()) return false;
     const [card] = bot.hand.splice(idx, 1);
@@ -431,6 +435,9 @@ function botAutoPlayAssist() {
     const final = { cardId: pad3(cid), isFaceDown: !!faceDown };
 
     bot.field.push(final);
+    console.log('[bot] place', { id: final.cardId, faceDown: final.isFaceDown });
+    renderZones(); // ensure immediate visual
+    await wait();  // visible "place" step
 
     // remember locally-placed bot cards for reconciliation after server merge
     duelState._uiPlayedThisTurn ||= [];
@@ -439,15 +446,16 @@ function botAutoPlayAssist() {
     const meta = getMeta(final.cardId);
 
     if (!final.isFaceDown) {
-      // resolve immediately for visible non-traps
       resolveImmediateEffect(meta, 'player2');
       final._resolvedByUI = true;
+      console.log('[bot] resolve', { id: final.cardId, type: meta?.type });
+      setHpText();
+      await wait(); // time for damage/heal animations
 
-      // If this was Attack/Infected, trigger one of the human's traps
-      const t = String(meta?.type || '').toLowerCase();
-      if (t === 'attack' || t === 'infected') {
-        triggerOneTrap('player1');
-      }
+      // Attack/Infected auto-trigger handled inside resolveImmediateEffect
+    } else {
+      // facedown set — give it a beat on screen
+      await wait();
     }
 
     playedAny = true;
@@ -461,7 +469,7 @@ function botAutoPlayAssist() {
       return !isTrap(cid);
     });
     if (i === -1) break;
-    playOne(bot.hand[i], false);
+    await playOne(bot.hand[i], false);
   }
 
   // 2) Then set traps while room remains
@@ -471,8 +479,7 @@ function botAutoPlayAssist() {
       return isTrap(cid);
     });
     if (i === -1) break;
-    // set face-down trap
-    playOne(bot.hand[i], true);
+    await playOne(bot.hand[i], true);
   }
 
   return playedAny;
@@ -704,6 +711,7 @@ function clampFields(state) {
       // If field exceeds limit, move extras to discard (display safeguard)
       if (Array.isArray(p.field) && p.field.length > MAX_FIELD_SLOTS) {
         const extras = p.field.splice(MAX_FIELD_SLOTS); // remove beyond slots
+        extras.forEach(c => c && (c._cleanupReason = 'overflow'));
         p.discardPile.push(...extras);
         console.warn(`[UI] Field overflow (${pk}) — moved ${extras.length} card(s) to discard for display cap.`);
       }
@@ -757,7 +765,6 @@ function startTurnDrawIfNeeded() {
 
 /* ----------------- render helpers ----------------- */
 function renderZones() {
-  // You: visible; Opponent: renderHand will auto-face-down in player view
   renderHand('player1', isSpectator);
   renderHand('player2', isSpectator);
   renderField('player1', isSpectator);
@@ -791,10 +798,10 @@ async function maybeRunBotTurn() {
   if (!duelState?.started) return;                 // <-- don't run before flip completes
   if (duelState.currentPlayer !== 'player2') return; // only when it's actually bot's turn
 
-  // Make sure card metadata is ready before any meta-based decisions
   await ensureAllCardsLoaded();
 
   botTurnInFlight = true;
+  const turnStart = Date.now();
   try {
     const payload = normalizeStateForServer(duelState);
 
@@ -809,9 +816,10 @@ async function maybeRunBotTurn() {
     } catch {}
 
     // Pre-play assist: ensure the bot actually plays cards before asking server
+    let playedPre = false;
     try {
-      const prePlayed = botAutoPlayAssist();
-      if (prePlayed) {
+      playedPre = await botAutoPlayAssist();
+      if (playedPre) {
         resolveBotNonTrapCardsOnce();
       }
     } catch (e) { console.warn('[UI] pre-play assist error', e); }
@@ -830,21 +838,66 @@ async function maybeRunBotTurn() {
     }
 
     // --- Client-side safety net: make the bot play anything it reasonably can.
+    let playedPost = false;
     if (duelState.currentPlayer === 'player2') {
-      const played = botAutoPlayAssist();
-      if (played) {
-        // Re-resolve any fresh bot face-up cards (just in case)
+      playedPost = await botAutoPlayAssist();
+      if (playedPost) {
         resolveBotNonTrapCardsOnce();
       }
     }
+
+    // --- Last-ditch: ensure at least ONE card was played this turn.
+    const bot = duelState?.players?.player2;
+    if (duelState.currentPlayer === 'player2' && bot && !playedPre && !playedPost) {
+      ensureArrays(bot);
+      if (bot.hand.length && (bot.field?.length ?? 0) < MAX_FIELD_SLOTS) {
+        const first = bot.hand[0];
+        // face-down if trap, else face-up
+        const cid = (typeof first === 'object' && first !== null) ? (first.cardId ?? first.id ?? first.card_id) : first;
+        const faceDown = isTrap(cid);
+        console.warn('[UI] fallback: forcing a play', { id: pad3(cid), faceDown });
+        // minimal reuse of assist's logic:
+        bot.hand = bot.hand.slice(); // ensure mutable
+        await (async () => {
+          const idx = 0;
+          const [card] = bot.hand.splice(idx, 1);
+          const cardId = pad3((typeof card === 'object' && card !== null) ? (card.cardId ?? card.id ?? card.card_id) : card);
+          const final = { cardId, isFaceDown: faceDown };
+          bot.field.push(final);
+          renderZones();
+          await wait();
+          const meta = getMeta(final.cardId);
+          if (!faceDown) {
+            resolveImmediateEffect(meta, 'player2');
+            final._resolvedByUI = true;
+            setHpText();
+            await wait();
+          } else {
+            await wait();
+          }
+          duelState._uiPlayedThisTurn ||= [];
+          duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
+        })();
+      }
+    }
+
+    // Hold the board momentarily so plays are visible before handoff
+    await wait();
   } catch (err) {
     console.error('[UI] Bot move error:', err);
     // Fallback: still try to make progress locally if it's bot's turn
     if (duelState.currentPlayer === 'player2') {
-      botAutoPlayAssist();
+      await botAutoPlayAssist();
       resolveBotNonTrapCardsOnce();
+      await wait();
     }
   } finally {
+    // Enforce a minimum visible bot turn duration
+    const elapsed = Date.now() - turnStart;
+    if (elapsed < MIN_TURN_MS) {
+      await wait(MIN_TURN_MS - elapsed);
+    }
+
     // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemerals + fired traps).
     if (duelState.currentPlayer === 'player1') {
       cleanupEndOfTurnLocal('player2');
