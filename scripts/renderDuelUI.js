@@ -35,6 +35,8 @@ async function ensureAllCardsLoaded() {
 }
 
 const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
+const isPracticeMode =
+  (new URLSearchParams(window.location.search).get('mode') || '').toLowerCase() === 'practice';
 
 // Prevent double-sending bot turns if render fires rapidly
 let botTurnInFlight = false;
@@ -430,6 +432,10 @@ function botAutoPlayAssist() {
 
     bot.field.push(final);
 
+    // remember locally-placed bot cards for reconciliation after server merge
+    duelState._uiPlayedThisTurn ||= [];
+    duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
+
     const meta = getMeta(final.cardId);
 
     if (!final.isFaceDown) {
@@ -621,6 +627,10 @@ function normalizeStateForServer(state) {
 function mergeServerIntoUI(server) {
   if (!server || typeof server !== 'object') return;
 
+  // --- snapshot current local UI state we want to preserve in practice mode
+  const localBot = duelState?.players?.player2 ? JSON.parse(JSON.stringify(duelState.players.player2)) : null;
+  const locallyPlayed = Array.isArray(duelState._uiPlayedThisTurn) ? [...duelState._uiPlayedThisTurn] : [];
+
   const next = typeof structuredClone === 'function'
     ? structuredClone(server)
     : JSON.parse(JSON.stringify(server));
@@ -652,6 +662,28 @@ function mergeServerIntoUI(server) {
       P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
     }
   });
+
+  // --- PRACTICE MODE: keep locally-played bot field cards if server didn't echo them
+  if (isPracticeMode && localBot && next?.players?.player2) {
+    const nextBot = next.players.player2;
+
+    const serverField = Array.isArray(nextBot.field) ? nextBot.field : [];
+    const localField  = Array.isArray(localBot.field) ? localBot.field : [];
+
+    if (localField.length > serverField.length) {
+      // Preserve local field (includes face-down traps and _resolvedByUI flags)
+      nextBot.field = localField.map(toFieldEntry);
+    }
+
+    // Reconcile hand: if any locally-placed cards are still in server hand, remove them
+    if (Array.isArray(nextBot.hand) && locallyPlayed.length) {
+      const playedSet = new Set(locallyPlayed.map(p => pad3(p.cardId)));
+      nextBot.hand = nextBot.hand.filter(h => {
+        const cid = pad3(h.cardId ?? h.id ?? h.card_id ?? h);
+        return !playedSet.has(cid);
+      });
+    }
+  }
 
   // Re-apply local fired-trap face state across merges
   reapplyFiredTrapFaceState();
@@ -816,6 +848,8 @@ async function maybeRunBotTurn() {
     // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemerals + fired traps).
     if (duelState.currentPlayer === 'player1') {
       cleanupEndOfTurnLocal('player2');
+      // clear reconciliation memory for next bot turn
+      duelState._uiPlayedThisTurn = [];
     }
 
     botTurnInFlight = false;
