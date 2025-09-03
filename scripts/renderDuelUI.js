@@ -411,18 +411,15 @@ function resolveBotNonTrapCardsOnce() {
 
 /* ---------------- Bot auto-play assist (client-side safety net) ---------------- */
 /**
- * If the server didn’t play anything meaningful, we proactively play what we can:
- * - Prefer non-traps (face-up) until field is full.
- * - Then set traps (face-down) while space remains.
- * - Never discard unless absolutely required (not needed under current caps).
- * Returns true if we played at least one card.
+ * Play exactly ONE card:
+ * - Prefer the first non-trap (face-up).
+ * - Otherwise set the first trap (face-down).
  */
 async function botAutoPlayAssist() {
   const bot = duelState?.players?.player2;
   if (!bot) return false;
   ensureArrays(bot);
 
-  let playedAny = false;
   const fieldHasRoom = () => Array.isArray(bot.field) && bot.field.length < MAX_FIELD_SLOTS;
 
   // Helper to play one card object {cardId,isFaceDown?}
@@ -451,38 +448,35 @@ async function botAutoPlayAssist() {
       console.log('[bot] resolve', { id: final.cardId, type: meta?.type });
       setHpText();
       await wait(); // time for damage/heal animations
-
-      // Attack/Infected auto-trigger handled inside resolveImmediateEffect
     } else {
       // facedown set — give it a beat on screen
       await wait();
     }
 
-    playedAny = true;
     return true;
   };
 
-  // 1) Play non-traps first
-  while (fieldHasRoom()) {
-    const i = bot.hand.findIndex(e => {
-      const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
-      return !isTrap(cid);
-    });
-    if (i === -1) break;
-    await playOne(bot.hand[i], false);
+  if (!fieldHasRoom()) return false;
+
+  // Prefer a single non-trap
+  const ntIndex = bot.hand.findIndex(e => {
+    const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
+    return !isTrap(cid);
+  });
+  if (ntIndex !== -1) {
+    return await playOne(bot.hand[ntIndex], false);
   }
 
-  // 2) Then set traps while room remains
-  while (fieldHasRoom()) {
-    const i = bot.hand.findIndex(e => {
-      const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
-      return isTrap(cid);
-    });
-    if (i === -1) break;
-    await playOne(bot.hand[i], true);
+  // Otherwise set exactly one trap face-down
+  const trapIndex = bot.hand.findIndex(e => {
+    const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
+    return isTrap(cid);
+  });
+  if (trapIndex !== -1) {
+    return await playOne(bot.hand[trapIndex], true);
   }
 
-  return playedAny;
+  return false;
 }
 
 /* ------------------ display helpers ------------------ */
@@ -815,7 +809,7 @@ async function maybeRunBotTurn() {
       });
     } catch {}
 
-    // Pre-play assist: ensure the bot actually plays cards before asking server
+    // Pre-play assist: ensure the bot actually plays one visible card before asking server
     let playedPre = false;
     try {
       playedPre = await botAutoPlayAssist();
@@ -837,7 +831,7 @@ async function maybeRunBotTurn() {
       }
     }
 
-    // --- Client-side safety net: make the bot play anything it reasonably can.
+    // --- Client-side safety net: still bot's turn? allow a single assist again.
     let playedPost = false;
     if (duelState.currentPlayer === 'player2') {
       playedPost = await botAutoPlayAssist();
