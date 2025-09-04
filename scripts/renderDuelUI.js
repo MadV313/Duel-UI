@@ -82,10 +82,10 @@ function hasTag(meta, ...tags) {
 
 function isTrap(cardId) {
   const m = getMeta(cardId);
-  if (!m) return false; // trap-specific handling relies on meta
+  // robust detection: type "trap" OR tag includes "trap" OR the card name includes the word "trap"
   const t = String(m?.type || '').toLowerCase();
-  // treat traps as type "trap" OR tag includes "trap"
-  return t === 'trap' || hasTag(m, 'trap');
+  const name = String(m?.name || '').toLowerCase();
+  return t === 'trap' || hasTag(m, 'trap') || /\btrap\b/.test(name);
 }
 
 function looksInfected(meta) {
@@ -256,20 +256,50 @@ function isPersistentOnField(meta) {
 /** Remove only fired traps for a given owner (move to discard). */
 function purgeFiredTraps(ownerKey) {
   const P = duelState.players?.[ownerKey];
-  if (!P || !Array.isArray(P.field)) return;
+  if (!P) return;
+  ensureArrays(P);
+  if (!Array.isArray(P.field) || P.field.length === 0) return;
+
   const keep = [];
-  const toss = [];
+  const moved = [];
+
   for (const card of P.field) {
-    if (card && isTrap(card.cardId) && card._fired) {
-      toss.push(card);
+    // be robust to different shapes
+    const rawId = card?.cardId ?? card?.id ?? card?.card_id;
+    const cardId = rawId != null ? pad3(rawId) : null;
+    const firedTrap = !!(card && cardId && isTrap(cardId) && card._fired);
+
+    if (firedTrap) {
+      // push a clean copy into discard (face-up, not "fired" anymore)
+      moved.push({
+        ...card,
+        cardId,
+        isFaceDown: false,
+        _fired: false,
+        _cleanupReason: 'firedTrap',
+      });
     } else {
       keep.push(card);
     }
   }
-  if (toss.length) {
-    ensureArrays(P);
-    P.discardPile.push(...toss);
+
+  if (moved.length) {
+    P.discardPile.push(...moved);
+
+    // drop any persisted face-state marks for these traps
+    try {
+      const toRemove = new Set(moved.map(c => c.cardId));
+      const marks = firedTrapMarks();
+      duelState._pendingFiredTraps = marks.filter(
+        m => !(m.owner === ownerKey && toRemove.has(pad3(m.cardId)))
+      );
+    } catch {}
+
+    try {
+      console.log('[purgeFiredTraps]', { owner: ownerKey, moved: moved.map(c => c.cardId) });
+    } catch {}
   }
+
   P.field = keep;
 }
 
