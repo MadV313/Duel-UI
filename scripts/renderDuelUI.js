@@ -51,8 +51,8 @@ const MAX_HAND = 4;
 const ENABLE_UI_SIDE_HAND_DISCARD = false;
 
 // 🎬 Turn pacing (slow-mo)
-const SLOW_MO_MS = 750; // each step ~0.75s, bot turn ~3–4s
-const MIN_TURN_MS = 3200; // enforce minimum visible duration
+const SLOW_MO_MS = 750;           // each step ~0.75s
+const MIN_TURN_MS = 6000;         // minimum visible bot turn (~6s)
 const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
 
 /* ------------------ small helpers ------------------ */
@@ -82,7 +82,7 @@ function hasTag(meta, ...tags) {
 
 function isTrap(cardId) {
   const m = getMeta(cardId);
-  if (!m) return false; // trap-specific handling relies on meta; persistence guard below handles unknown meta
+  if (!m) return false; // trap-specific handling relies on meta
   const t = String(m?.type || '').toLowerCase();
   // treat traps as type "trap" OR tag includes "trap"
   return t === 'trap' || hasTag(m, 'trap');
@@ -244,13 +244,33 @@ function damageFromText(effectText) {
 
 /* ---------- persistence helper (mirror duel.js) ---------- */
 function isPersistentOnField(meta) {
-  // SAFETY: unknown meta should *not* be tossed immediately — keep until we know.
-  if (!meta) return true;
+  // Unknown meta should NOT stick around—treat as ephemeral so the board clears.
+  if (!meta) return false;
   const t = String(meta.type || '').toLowerCase();
   if (t === 'defense') return true;
   if (t === 'trap') return true; // traps stay set until they fire
   const tags = new Set(tagsOf(meta));
   return tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor');
+}
+
+/** Remove only fired traps for a given owner (move to discard). */
+function purgeFiredTraps(ownerKey) {
+  const P = duelState.players?.[ownerKey];
+  if (!P || !Array.isArray(P.field)) return;
+  const keep = [];
+  const toss = [];
+  for (const card of P.field) {
+    if (card && isTrap(card.cardId) && card._fired) {
+      toss.push(card);
+    } else {
+      keep.push(card);
+    }
+  }
+  if (toss.length) {
+    ensureArrays(P);
+    P.discardPile.push(...toss);
+  }
+  P.field = keep;
 }
 
 function cleanupEndOfTurnLocal(playerKey) {
@@ -293,6 +313,11 @@ function cleanupEndOfTurnLocal(playerKey) {
 }
 
 /* ---------- Trap activation (UI side, for bot plays) ---------- */
+/**
+ * Flip + resolve the first facedown trap on defender.
+ * It will remain on the field, face-up, until the end of that defender's turn,
+ * at which time cleanup discards it (because we mark `_fired = true` here).
+ */
 function triggerOneTrap(defenderKey) {
   const D = duelState.players[defenderKey];
   if (!D) return false;
@@ -458,23 +483,19 @@ async function botAutoPlayAssist() {
 
   if (!fieldHasRoom()) return false;
 
-  // Prefer a single non-trap
-  const ntIndex = bot.hand.findIndex(e => {
+  // Prefer a visible non-trap
+  const iNT = bot.hand.findIndex(e => {
     const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
     return !isTrap(cid);
   });
-  if (ntIndex !== -1) {
-    return await playOne(bot.hand[ntIndex], false);
-  }
+  if (iNT !== -1) return await playOne(bot.hand[iNT], false);
 
-  // Otherwise set exactly one trap face-down
-  const trapIndex = bot.hand.findIndex(e => {
+  // Otherwise, set one trap face-down
+  const iTrap = bot.hand.findIndex(e => {
     const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
     return isTrap(cid);
   });
-  if (trapIndex !== -1) {
-    return await playOne(bot.hand[trapIndex], true);
-  }
+  if (iTrap !== -1) return await playOne(bot.hand[iTrap], true);
 
   return false;
 }
@@ -759,6 +780,7 @@ function startTurnDrawIfNeeded() {
 
 /* ----------------- render helpers ----------------- */
 function renderZones() {
+  // You: visible; Opponent: renderHand will auto-face-down in player view
   renderHand('player1', isSpectator);
   renderHand('player2', isSpectator);
   renderField('player1', isSpectator);
@@ -809,7 +831,7 @@ async function maybeRunBotTurn() {
       });
     } catch {}
 
-    // Pre-play assist: ensure the bot actually plays one visible card before asking server
+    // Pre-play assist: ensure the bot actually plays a card before asking server
     let playedPre = false;
     try {
       playedPre = await botAutoPlayAssist();
@@ -831,7 +853,7 @@ async function maybeRunBotTurn() {
       }
     }
 
-    // --- Client-side safety net: still bot's turn? allow a single assist again.
+    // --- Client-side safety net: make the bot play if it still hasn't.
     let playedPost = false;
     if (duelState.currentPlayer === 'player2') {
       playedPost = await botAutoPlayAssist();
@@ -894,7 +916,8 @@ async function maybeRunBotTurn() {
 
     // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemerals + fired traps).
     if (duelState.currentPlayer === 'player1') {
-      cleanupEndOfTurnLocal('player2');
+      cleanupEndOfTurnLocal('player2');  // clear bot's non-persistent and fired traps
+      purgeFiredTraps('player1');        // clear your traps that fired during bot's turn
       // clear reconciliation memory for next bot turn
       duelState._uiPlayedThisTurn = [];
     }
