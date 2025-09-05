@@ -885,7 +885,7 @@ async function maybeRunBotTurn() {
 
     // --- Client-side safety net: make the bot play if it still hasn't.
     let playedPost = false;
-    if (duelState.currentPlayer === 'player2') {
+    if (duelState.currentPlayer === 'player2' && !playedPre) {
       playedPost = await botAutoPlayAssist();
       if (playedPost) {
         resolveBotNonTrapCardsOnce();
@@ -944,10 +944,12 @@ async function maybeRunBotTurn() {
       await wait(MIN_TURN_MS - elapsed);
     }
 
-    // If bot handed the turn back, guarantee its end-of-turn cleanup (discard ephemerals + fired traps).
+    // If bot handed the turn back, show the final board state briefly,
+    // then clean up: bot ephemerals + your fired traps.
     if (duelState.currentPlayer === 'player1') {
-      cleanupEndOfTurnLocal('player2');  // clear bot's non-persistent and fired traps
-      purgeFiredTraps('player1');        // clear your traps that fired during bot's turn
+      await wait(1500);                 // short visible hold before clearing
+      cleanupEndOfTurnLocal('player2'); // clear bot's non-persistent & fired traps
+      purgeFiredTraps('player1');       // clear your traps fired during bot's turn
       // clear reconciliation memory for next bot turn
       duelState._uiPlayedThisTurn = [];
     }
