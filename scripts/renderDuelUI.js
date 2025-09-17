@@ -42,7 +42,7 @@ const isPracticeMode =
 let botTurnInFlight = false;
 
 // UI-enforced limits (keeps display sane even if backend misbehaves)
-const MAX_FIELD_SLOTS = 4;
+const MAX_FIELD_SLOTS = 3;
 const MAX_HP = 200;
 const MAX_HAND = 4;
 
