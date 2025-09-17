@@ -478,36 +478,44 @@ async function botAutoPlayAssist() {
   const fieldHasRoom = () => Array.isArray(bot.field) && bot.field.length < MAX_FIELD_SLOTS;
 
   // Helper to play one card object {cardId,isFaceDown?}
-  const playOne = async (entry, faceDown) => {
+  const playOne = async (entry, faceDownHint) => {
     const idx = bot.hand.findIndex(h => (h.cardId ?? h) === (entry.cardId ?? entry));
     if (idx === -1 || !fieldHasRoom()) return false;
     const [card] = bot.hand.splice(idx, 1);
-
-    const cid = (typeof card === 'object' && card !== null) ? (card.cardId ?? card.id ?? card.card_id) : card;
-    const final = { cardId: pad3(cid), isFaceDown: !!faceDown };
-
+  
+    const cid = (typeof card === 'object' && card !== null)
+      ? (card.cardId ?? card.id ?? card.card_id)
+      : card;
+  
+    // Start with the caller's hint…
+    const final = { cardId: pad3(cid), isFaceDown: !!faceDownHint };
+  
+    // 🚫 Hard rule: traps are ALWAYS set face-down until they fire.
+    if (isTrap(final.cardId)) final.isFaceDown = true;
+  
     bot.field.push(final);
     console.log('[bot] place', { id: final.cardId, faceDown: final.isFaceDown });
-    renderZones(); // ensure immediate visual
-    await wait();  // visible "place" step
-
+    renderZones();               // immediate visual
+    await wait();                // visible "place" beat
+  
     // remember locally-placed bot cards for reconciliation after server merge
     duelState._uiPlayedThisTurn ||= [];
     duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
-
+  
     const meta = getMeta(final.cardId);
-
+  
     if (!final.isFaceDown) {
+      // Only resolve *visible* (non-trap) cards immediately.
       resolveImmediateEffect(meta, 'player2');
       final._resolvedByUI = true;
       console.log('[bot] resolve', { id: final.cardId, type: meta?.type });
       setHpText();
-      await wait(); // time for damage/heal animations
+      await wait();              // time for damage/heal animations
     } else {
-      // facedown set — give it a beat on screen
+      // Facedown set — give it a short beat on screen.
       await wait();
     }
-
+  
     return true;
   };
 
