@@ -304,6 +304,7 @@ function destroyEnemyInfected(playerKey) {
 /* ---------- TRAP SYSTEM ---------- */
 /** Flip + resolve the first facedown trap on defender. It remains on field until End Turn. */
 function triggerOneTrap(defenderKey) {
+  console.log('[trap] attempting to fire for defender:', defenderKey);
   const D = duelState.players[defenderKey];
   if (!D) return false;
   ensureZones(D);
@@ -312,14 +313,14 @@ function triggerOneTrap(defenderKey) {
   if (idx < 0) return false;
 
   const trap = D.field[idx];
-  trap.isFaceDown = false;           // reveal now
-  trap._fired = true;                // mark for End Turn cleanup
+  trap.isFaceDown = false;
+  trap._fired = true;
+
   const meta = getMeta(trap.cardId);
+  console.log('[trap] fired', { defender: defenderKey, cardId: trap.cardId, name: meta?.name });
 
-  // Trap effect applies for its owner (the defender)
- resolveImmediateEffect(meta, defenderKey);
-
-  // DO NOT discard here; fired traps linger until End Turn.
+  resolveImmediateEffect(meta, defenderKey);
+  trap._resolvedByUI = true;
   triggerAnimation('trap');
   return true;
 }
@@ -334,13 +335,36 @@ function trapAutoTriggersNow(meta) {
  * Resolve immediate effects for non-traps (and any legacy auto-triggers if re-enabled).
  */
 function resolveImmediateEffect(meta, ownerKey) {
+  if (!meta) return;
+
   const you = ownerKey;
   const foe = ownerKey === 'player1' ? 'player2' : 'player1';
   ensureZones(duelState.players[you]);
   ensureZones(duelState.players[foe]);
 
+  // ⬇️ Breadcrumb before deciding whether to fire a trap
+  const type = txt(meta.type);
+  const name = String(meta.name || '').toLowerCase();
+  const tags = tagset(meta);
+
+  console.log('[trap-check]', {
+    owner: you,
+    foe,
+    cardId: meta.card_id ?? meta.cardId ?? '(unknown)',
+    name: meta.name,
+    type,
+    infectedTag: tags.has('infected'),
+  });
+
+  const isAtkOrInf =
+    type === 'attack' ||
+    type === 'infected' ||
+    tags.has('infected') ||
+    /infected/.test(name);
+
+  if (isAtkOrInf) triggerOneTrap(foe);
+
   const etext = `${txt(meta.effect)} ${txt(meta.logic_action)}`;
-  const type  = txt(meta.type);
 
   // ---------- DAMAGE ----------
   const pair = parseNumberPairTimes(etext);
@@ -490,10 +514,6 @@ function resolveImmediateEffect(meta, ownerKey) {
 
   // ---------- INFECTED-SPECIFIC ----------
   if (type === 'infected') {
-    if (/deal[s]?\s+(\d+)\s*dmg/.test(etext)) {
-      const dm = etext.match(/deal[s]?\s+(\d+)\s*dmg/);
-      damageFoe(foe, you, meta, Number(dm[1]));
-    }
     if (/drain|siphon/.test(etext) || /you\s+lose\s+(\d+)\s*hp.*enemy\s+gains\s+(\d+)/.test(etext)) {
       changeHP(you, -10); changeHP(foe, +5);
     }
@@ -619,7 +639,7 @@ export function drawCard() {
  * - Interactive plays allowed only for local human (player1)
  * - Field has 3 slots (UI guard)
  * - Traps stay face-down and DO NOT trigger immediately
- * - Non-traps resolve immediately; if they're Attack/Infected, they can trigger opponent traps
+ * - Non-traps resolve immediately; trap pre-fire is handled in resolveImmediateEffect
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -665,16 +685,9 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // If this was an Attack or Infected, trigger one enemy trap now (it stays until end turn)
-  const type = txt(meta.type);
-  const foe = playerKey === 'player1' ? 'player2' : 'player1';
-  if (type === 'attack' || type === 'infected') {
-   // Trap flips and marks _fired=true; stays on board until end of defender’s next turn
-   triggerOneTrap(foe);
- }
-
- // Now apply the attack/infected effect after any trap reaction
- resolveImmediateEffect(meta, playerKey);
+  // Traps (if any) will be handled inside resolveImmediateEffect (pre-fire on Attack/Infected).
+  resolveImmediateEffect(meta, playerKey);
+  card._resolvedByUI = true; // prevents resolveHumanNonTrapCardsOnce() from double-resolving
 
   triggerAnimation('combo');
   renderDuelUI();
