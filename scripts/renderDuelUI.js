@@ -958,6 +958,19 @@ async function postBotTurn(payload) {
   return res;
 }
 
+// Keep any unfired traps face-down (visual guarantee)
+function enforceFacedownUnfiredTraps(ownerKey) {
+  const P = duelState.players?.[ownerKey];
+  if (!P || !Array.isArray(P.field)) return;
+  for (const card of P.field) {
+    const cid = card?.cardId ?? card?.id ?? card?.card_id;
+    if (!cid) continue;
+    if (isTrap(cid) && !card._fired) {
+      card.isFaceDown = true;
+    }
+  }
+}
+
 /* ---------------- bot turn driver ----------------- */
 async function maybeRunBotTurn() {
   if (botTurnInFlight) return;
@@ -988,6 +1001,7 @@ async function maybeRunBotTurn() {
       playedPre = await botAutoPlayAssist();
       if (playedPre) {
         resolveBotNonTrapCardsOnce();
+        enforceFacedownUnfiredTraps('player2'); // <- traps stay set
       }
     } catch (e) { console.warn('[UI] pre-play assist error', e); }
 
@@ -1001,6 +1015,7 @@ async function maybeRunBotTurn() {
       const updated = await res.json().catch(() => null);
       if (updated) {
         mergeServerIntoUI(updated);
+        enforceFacedownUnfiredTraps('player2');   // <- normalize post-merge
       }
     }
 
@@ -1010,6 +1025,7 @@ async function maybeRunBotTurn() {
       playedPost = await botAutoPlayAssist();
       if (playedPost) {
         resolveBotNonTrapCardsOnce();
+        enforceFacedownUnfiredTraps('player2');   // <- traps stay set
       }
     }
 
@@ -1044,6 +1060,7 @@ async function maybeRunBotTurn() {
           }
           duelState._uiPlayedThisTurn ||= [];
           duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
+          enforceFacedownUnfiredTraps('player2'); // <- belt & suspenders
         })();
       }
     }
@@ -1056,6 +1073,7 @@ async function maybeRunBotTurn() {
     if (duelState.currentPlayer === 'player2') {
       await botAutoPlayAssist();
       resolveBotNonTrapCardsOnce();
+      enforceFacedownUnfiredTraps('player2');     // <- keep traps set
       await wait();
     }
   } finally {
@@ -1070,7 +1088,7 @@ async function maybeRunBotTurn() {
     if (duelState.currentPlayer === 'player1') {
       await wait(1500);                 // short visible hold before clearing
       cleanupEndOfTurnLocal('player2'); // clear bot's non-persistent & fired traps
-      purgeFiredTraps('player1');       // ← correct owner to purge here
+      purgeFiredTraps('player1');       // <-- correct owner to purge here
       // clear reconciliation memory for next bot turn
       duelState._uiPlayedThisTurn = [];
     }
@@ -1082,6 +1100,9 @@ async function maybeRunBotTurn() {
 
     // Resolve any new bot non-trap cards immediately (so effects apply now). No auto-discard.
     resolveBotNonTrapCardsOnce();
+
+    // Make absolutely sure traps remain set after any last updates
+    enforceFacedownUnfiredTraps('player2');
 
     // Re-render after bot move (or failure) to keep UI fresh
     setHpText();
