@@ -51,7 +51,7 @@ function setControlsDisabled(disabled) {
 function toEntry(objOrId, faceDownDefault = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
-    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown) };
+    return { cardId: pad3(cid), isFaceDown: Boolean(objOrId.isFaceDown ?? faceDownDefault) };
   }
   return { cardId: pad3(objOrId), isFaceDown: faceDownDefault };
 }
@@ -317,7 +317,7 @@ function triggerOneTrap(defenderKey) {
   const meta = getMeta(trap.cardId);
 
   // Trap effect applies for its owner (the defender)
-  resolveImmediateEffect(meta, defenderKey);
+ resolveImmediateEffect(meta, defenderKey);
 
   // DO NOT discard here; fired traps linger until End Turn.
   triggerAnimation('trap');
@@ -665,15 +665,16 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // Non-traps resolve immediately
-  resolveImmediateEffect(meta, playerKey);
-
   // If this was an Attack or Infected, trigger one enemy trap now (it stays until end turn)
   const type = txt(meta.type);
   const foe = playerKey === 'player1' ? 'player2' : 'player1';
   if (type === 'attack' || type === 'infected') {
-    triggerOneTrap(foe);
-  }
+   // Trap flips and marks _fired=true; stays on board until end of defender’s next turn
+   triggerOneTrap(foe);
+ }
+
+ // Now apply the attack/infected effect after any trap reaction
+ resolveImmediateEffect(meta, playerKey);
 
   triggerAnimation('combo');
   renderDuelUI();
