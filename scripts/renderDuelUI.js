@@ -461,71 +461,70 @@ function triggerOneTrap(defenderKey) {
   if (idx < 0) return false;
 
   const trap = D.field[idx];
-  trap.isFaceDown = false; // reveal
-  trap._fired = true;      // mark so end-of-turn cleanup will remove it
-  // remember so merges keep it face-up
+  trap.isFaceDown = false;
+  trap._fired = true;
   firedTrapMarks().push({ owner: defenderKey, cardId: trap.cardId });
-  const meta = getMeta(trap.cardId);
 
-  // Apply trap for defender (its owner)
+  const meta = getMeta(trap.cardId);
   resolveImmediateEffect(meta, defenderKey);
 
-  // ❌ Do NOT discard here — it lingers until End Turn.
+  try { console.log('[trap] fired', { owner: defenderKey, id: trap.cardId }); } catch {}
   return true;
 }
 
 /* -------------- UI-side effect resolver (bot & human) -------------- */
 function resolveImmediateEffect(meta, ownerKey) {
-  if (!meta) return;
-
-  const you = ownerKey;                        // the owner of the resolving card (or trap)
+  const you = ownerKey;
   const foe = ownerKey === 'player1' ? 'player2' : 'player1';
-  const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
-  const type = String(meta.type || '').toLowerCase();
 
-  // 🔧 FIX: TRAP SHOULD FIRE BEFORE the Attack/Infected effect resolves.
-  if (type === 'attack' || type === 'infected') {
-    triggerOneTrap(foe);
+  // Fire one defender trap BEFORE any Attack/Infected resolves (works for bot & human)
+  const type  = String(meta?.type || '').toLowerCase();
+  const name  = String(meta?.name || '').toLowerCase();
+  const tags  = new Set(tagsOf(meta || {}));
+  const isAtkOrInf =
+    type === 'attack' ||
+    type === 'infected' ||
+    tags.has('infected') ||
+    /\binfected\b/.test(name);
+
+  if (isAtkOrInf) {
+    triggerOneTrap(foe); // flips, marks _fired, resolves trap for defender
   }
 
-  // --- damage (supports "10x2" and "deal/deals X DMG/DAMAGE")
+  if (!meta) return;
+
+  const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
+
+  // --- damage ("10x2", "deal X dmg/damage")
   const dmg = damageFromText(text);
   if (dmg > 0) changeHP(foe, -dmg);
 
-  // --- heal (restore/heal X hp)
+  // --- heal
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) changeHP(you, +Number(mHeal[1]));
 
-  // --- generic draws
+  // --- draws
   const mDraw = text.match(/draw\s+(a|\d+)\s+(?:card|cards)/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // --- category draws (exact phrasings)
+  // --- category draws
   if (/draw\s+1\s+loot\s+card/.test(text))     drawFromDeckWhere(you, isType('loot'));
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
   if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
-  // --- UI-side hand discard DISABLED by default (prevents bot nuking its hand)
-  if (ENABLE_UI_SIDE_HAND_DISCARD && /\bdiscard\s+1\s+card\b(?!.*after\s+use)/.test(text)) {
-    const hand = duelState.players[you].hand;
-    if (hand.length) {
-      const tossed = hand.pop();
-      duelState.players[you].discardPile ||= [];
-      duelState.players[you].discardPile.push(tossed);
-    }
-  }
+  // --- (UI-side discard is intentionally disabled unless you flip ENABLE_UI_SIDE_HAND_DISCARD)
 
   // --- skip next draw
   if (/skip\s+next\s+draw/.test(text)) {
     duelState.players[you].skipNextDraw = true;
   }
 
-  // --- destroy/remove enemy field card (various phrasings)
+  // --- destroy/remove enemy field card
   if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
     const foeField = duelState.players[foe].field || [];
     if (foeField.length) {
@@ -536,17 +535,15 @@ function resolveImmediateEffect(meta, ownerKey) {
     }
   }
 
-  // --- explicitly target "infected"
+  // --- infected targets
   if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(text)) {
     destroyEnemyInfected(foe);
   }
 
-  // --- disarm/remove trap
+  // --- traps
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) {
     discardRandomTrap(foe);
   }
-
-  // --- reveal a face-down trap
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
     revealRandomEnemyTrap(foe);
   }
