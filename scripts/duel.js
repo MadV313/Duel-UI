@@ -1,6 +1,6 @@
 // scripts/duel.js — draw, play, discard, turn logic (UI-only)
 import { duelState } from './duelState.js';
-import { renderDuelUI } from './renderDuelUI.js';
+import { renderDuelUI as _renderDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 import allCards from './allCards.js';
@@ -313,16 +313,14 @@ function triggerOneTrap(defenderKey) {
   if (idx < 0) return false;
 
   const trap = D.field[idx];
-  trap.isFaceDown = false;           // reveal now
-  trap._fired = true;                // mark for End Turn cleanup
+  trap.isFaceDown = false;
+  trap._fired = true;
+
   const meta = getMeta(trap.cardId);
   console.log('[trap] fired', { defender: defenderKey, cardId: trap.cardId, name: meta?.name });
 
-  // Trap effect applies for its owner (the defender)
   resolveImmediateEffect(meta, defenderKey);
-  trap._resolvedByUI = true; // prevents any other client pass from touching it again
-
-  // DO NOT discard here; fired traps linger until End Turn.
+  trap._resolvedByUI = true;
   triggerAnimation('trap');
   return true;
 }
@@ -344,7 +342,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   ensureZones(duelState.players[you]);
   ensureZones(duelState.players[foe]);
 
-  // ⬇️ Breadcrumb before deciding whether to fire a trap
+  // Breadcrumb before trap decision
   const type = txt(meta.type);
   const name = String(meta.name || '').toLowerCase();
   const tags = tagset(meta);
@@ -358,7 +356,6 @@ function resolveImmediateEffect(meta, ownerKey) {
     infectedTag: tags.has('infected'),
   });
 
-  // Pre-fire defender trap if this is an Attack or Infected (also covers infected-tagged cards)
   const isAtkOrInf =
     type === 'attack' ||
     type === 'infected' ||
@@ -558,6 +555,43 @@ function resolveImmediateEffect(meta, ownerKey) {
   }
 }
 
+/* ---------- BOT/REMOTE PLAY RESOLVER (important) ---------- */
+/**
+ * Scan a player's field for cards that haven't been resolved on this client
+ * (i.e., were placed by the bot/backend) and resolve them once.
+ * This lets player2 plays trigger player1 traps on the UI.
+ */
+function resolveUnresolvedNonTrapsOnceFor(ownerKey) {
+  const P = duelState.players?.[ownerKey];
+  if (!P) return;
+  ensureZones(P);
+  const field = P.field || [];
+  for (const card of field) {
+    if (!card || card._resolvedByUI) continue;
+    const meta = getMeta(typeof card === 'object' ? card.cardId : card);
+    if (!meta || isTrapMeta(meta)) continue; // traps don't resolve here
+    console.log('[auto-resolve]', { owner: ownerKey, cardId: card.cardId, name: meta?.name });
+    resolveImmediateEffect(meta, ownerKey);  // this will triggerOneTrap(defender) if needed
+    card._resolvedByUI = true;
+  }
+}
+
+/** Wrap the renderer so we always apply any bot plays after render. */
+function renderDuelUI() {
+  _renderDuelUI();
+  // process remote/bot plays that appeared in state
+  resolveUnresolvedNonTrapsOnceFor('player2');
+}
+
+/** Safety net: poll in case updates arrive between our own renders. */
+setInterval(() => {
+  try {
+    resolveUnresolvedNonTrapsOnceFor('player2');
+  } catch (e) {
+    // no-op
+  }
+}, 250);
+
 /* ---------- start-of-turn auto draw (once per turn) ---------- */
 
 /**
@@ -642,7 +676,7 @@ export function drawCard() {
  * - Interactive plays allowed only for local human (player1)
  * - Field has 3 slots (UI guard)
  * - Traps stay face-down and DO NOT trigger immediately
- * - Non-traps resolve immediately; trap pre-fire handled here and in resolveImmediateEffect
+ * - Non-traps resolve immediately; if they're Attack/Infected, they can trigger opponent traps
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -688,17 +722,9 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // If this was an Attack/Infected, pre-fire a foe trap now (defensive duplication is safe).
-  const type = txt(meta.type);
-  const foe  = playerKey === 'player1' ? 'player2' : 'player1';
-  const tags = tagset(meta);
-  if (type === 'attack' || type === 'infected' || tags.has('infected') || /infected/i.test(meta.name || '')) {
-    triggerOneTrap(foe);
-  }
-
-  // Now resolve the card's effect (resolveImmediateEffect also pre-fires for bot callers)
+  // Now resolve the non-trap; resolveImmediateEffect will flip an enemy trap first if needed
   resolveImmediateEffect(meta, playerKey);
-  card._resolvedByUI = true; // prevents double-resolve by any other pass
+  card._resolvedByUI = true;
 
   triggerAnimation('combo');
   renderDuelUI();
@@ -790,6 +816,4 @@ window.endTurn           = endTurn;
 window.playCard          = playCard;
 window.discardCard       = discardCard;
 window.startTurnIfNeeded = startTurnIfNeeded;
-// Helpful for AI/debug: call this after placing a card to force resolve + pre-fire
-window._resolveImmediateEffect = (meta, ownerKey) => resolveImmediateEffect(meta, ownerKey);
-window._triggerOneTrap = triggerOneTrap;
+window.resolveUnresolvedNonTrapsOnceFor = resolveUnresolvedNonTrapsOnceFor;
