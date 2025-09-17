@@ -916,12 +916,12 @@ async function maybeRunBotTurn() {
           const idx = 0;
           const [card] = bot.hand.splice(idx, 1);
           const cardId = pad3((typeof card === 'object' && card !== null) ? (card.cardId ?? card.id ?? card.card_id) : card);
-          const final = { cardId, isFaceDown: faceDown };
+          const final = { cardId, isFaceDown: faceDown || isTrap(cardId) }; // traps forced face-down
           bot.field.push(final);
           renderZones();
           await wait();
           const meta = getMeta(final.cardId);
-          if (!faceDown) {
+          if (!final.isFaceDown) {
             resolveImmediateEffect(meta, 'player2');
             final._resolvedByUI = true;
             setHpText();
@@ -953,11 +953,11 @@ async function maybeRunBotTurn() {
     }
 
     // If bot handed the turn back, show the final board state briefly,
-    // then clean up: bot ephemerals + your fired traps.
+    // then clean up: bot ephemerals + BOT fired traps (owner clears at end of their own turn).
     if (duelState.currentPlayer === 'player1') {
       await wait(1500);                 // short visible hold before clearing
       cleanupEndOfTurnLocal('player2'); // clear bot's non-persistent & fired traps
-      purgeFiredTraps('player1');       // clear your traps fired during bot's turn
+      purgeFiredTraps('player2');       // clear bot traps that fired during YOUR previous turn
       // clear reconciliation memory for next bot turn
       duelState._uiPlayedThisTurn = [];
     }
