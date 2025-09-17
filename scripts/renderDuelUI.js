@@ -428,7 +428,7 @@ function cleanupEndOfTurnLocal(playerKey) {
   P.field = keep;
 }
 
-/* ---------- Trap activation (UI side, for bot plays) ---------- */
+/* ---------- Trap activation (UI side, for bot & human plays) ---------- */
 /**
  * Flip + resolve the first facedown trap on defender.
  * It will remain on the field, face-up, until the end of that defender's turn,
@@ -456,14 +456,19 @@ function triggerOneTrap(defenderKey) {
   return true;
 }
 
-/* -------------- UI-side effect resolver (bot) -------------- */
+/* -------------- UI-side effect resolver (bot & human) -------------- */
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
 
-  const you = ownerKey;                        // 'player2' when bot owns, but function is reused
-  const foe = ownerKey === 'player1' ? 'player2' : 'player1'; // opposite side
+  const you = ownerKey;                        // the owner of the resolving card (or trap)
+  const foe = ownerKey === 'player1' ? 'player2' : 'player1';
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
   const type = String(meta.type || '').toLowerCase();
+
+  // 🔧 FIX: TRAP SHOULD FIRE BEFORE the Attack/Infected effect resolves.
+  if (type === 'attack' || type === 'infected') {
+    triggerOneTrap(foe);
+  }
 
   // --- damage (supports "10x2" and "deal/deals X DMG/DAMAGE")
   const dmg = damageFromText(text);
@@ -526,11 +531,6 @@ function resolveImmediateEffect(meta, ownerKey) {
   // --- reveal a face-down trap
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
     revealRandomEnemyTrap(foe);
-  }
-
-  // ✅ If this resolved card is Attack or Infected, trigger exactly one facedown trap on the defender
-  if (type === 'attack' || type === 'infected') {
-    triggerOneTrap(foe);
   }
 }
 
@@ -595,28 +595,28 @@ async function botAutoPlayAssist() {
     const idx = bot.hand.findIndex(h => (h.cardId ?? h) === (entry.cardId ?? entry));
     if (idx === -1 || !fieldHasRoom()) return false;
     const [card] = bot.hand.splice(idx, 1);
-  
+
     const cid = (typeof card === 'object' && card !== null)
       ? (card.cardId ?? card.id ?? card.card_id)
       : card;
-  
+
     // Start with the caller's hint…
     const final = { cardId: pad3(cid), isFaceDown: !!faceDownHint };
-  
+
     // 🚫 Hard rule: traps are ALWAYS set face-down until they fire.
     if (isTrap(final.cardId)) final.isFaceDown = true;
-  
+
     bot.field.push(final);
     console.log('[bot] place', { id: final.cardId, faceDown: final.isFaceDown });
     renderZones();               // immediate visual
     await wait();                // visible "place" beat
-  
+
     // remember locally-placed bot cards for reconciliation after server merge
     duelState._uiPlayedThisTurn ||= [];
     duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
-  
+
     const meta = getMeta(final.cardId);
-  
+
     if (!final.isFaceDown) {
       // Only resolve *visible* (non-trap) cards immediately.
       resolveImmediateEffect(meta, 'player2');
@@ -628,7 +628,7 @@ async function botAutoPlayAssist() {
       // Facedown set — give it a short beat on screen.
       await wait();
     }
-  
+
     return true;
   };
 
@@ -980,6 +980,12 @@ async function maybeRunBotTurn() {
 
   await ensureAllCardsLoaded();
 
+  // 🔧 FIX: Human just ended their turn → clear human ephemerals & bot's fired traps (bot was defender).
+  cleanupEndOfTurnLocal('player1');     // clear non-persistent human cards and any fired traps owned by human (if flagged)
+  purgeFiredTraps('player2');           // if bot had a trap that fired during human's turn, discard it now
+  enforceFacedownUnfiredTraps('player1');
+  enforceFacedownUnfiredTraps('player2');
+
   botTurnInFlight = true;
   const turnStart = Date.now();
   try {
@@ -1016,6 +1022,7 @@ async function maybeRunBotTurn() {
       if (updated) {
         mergeServerIntoUI(updated);
         enforceFacedownUnfiredTraps('player2');   // <- normalize post-merge
+        enforceFacedownUnfiredTraps('player1');
       }
     }
 
@@ -1088,7 +1095,7 @@ async function maybeRunBotTurn() {
     if (duelState.currentPlayer === 'player1') {
       await wait(1500);                 // short visible hold before clearing
       cleanupEndOfTurnLocal('player2'); // clear bot's non-persistent & fired traps
-      purgeFiredTraps('player1');       // <-- correct owner to purge here
+      purgeFiredTraps('player1');       // discard human-owned traps that fired while bot attacked
       // clear reconciliation memory for next bot turn
       duelState._uiPlayedThisTurn = [];
     }
@@ -1103,6 +1110,7 @@ async function maybeRunBotTurn() {
 
     // Make absolutely sure traps remain set after any last updates
     enforceFacedownUnfiredTraps('player2');
+    enforceFacedownUnfiredTraps('player1');
 
     // Re-render after bot move (or failure) to keep UI fresh
     setHpText();
@@ -1140,6 +1148,10 @@ export async function renderDuelUI() {
 
   // ✅ NEW: resolve human face-up non-traps that need interaction (e.g., Walkie Talkie)
   await resolveHumanNonTrapCardsOnce();
+
+  // Belts & suspenders: keep unfired traps facedown on both sides every render.
+  enforceFacedownUnfiredTraps('player1');
+  enforceFacedownUnfiredTraps('player2');
   
   renderZones();
   setHpText();
