@@ -121,6 +121,92 @@ function drawFor(playerKey) {
   return true;
 }
 
+/* ------------ lightweight picker overlay for human choices ------------ */
+function ensureOverlayRoot() {
+  let el = document.getElementById('duel-overlay-root');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'duel-overlay-root';
+    el.style.cssText = `
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,0.6); z-index:9999;`;
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function presentCardPicker(cards, { title = 'Choose a card' } = {}) {
+  return new Promise(resolve => {
+    const root = ensureOverlayRoot();
+    root.innerHTML = '';
+    const box = document.createElement('div');
+    box.style.cssText = `
+      background:#111; color:#eee; width:min(520px,90vw); max-height:70vh; overflow:auto;
+      border-radius:12px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.5);`;
+    const h = document.createElement('div');
+    h.textContent = title;
+    h.style.cssText = 'font-weight:600; margin-bottom:10px; font-size:18px;';
+    const list = document.createElement('div');
+    for (let i = 0; i < cards.length; i++) {
+      const entry = cards[i];
+      const cid = entry?.cardId ?? entry?.id ?? entry?.card_id ?? entry;
+      const meta = getMeta(cid);
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.style.cssText =
+        'display:block;width:100%;text-align:left;padding:10px;border:1px solid #333;background:#1a1a1a;margin:6px 0;border-radius:8px;cursor:pointer;';
+      row.textContent = `${pad3(cid)} — ${meta?.name || 'Unknown'}`;
+      row.onclick = () => { root.style.display='none'; resolve({ index: i, card: entry }); };
+      list.appendChild(row);
+    }
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancel';
+    cancel.type = 'button';
+    cancel.style.cssText = 'margin-top:8px;padding:8px 12px;background:#333;color:#eee;border-radius:8px;border:1px solid #444;';
+    cancel.onclick = () => { root.style.display='none'; resolve(null); };
+
+    box.appendChild(h);
+    box.appendChild(list);
+    box.appendChild(cancel);
+    root.appendChild(box);
+    root.style.display = 'flex';
+  });
+}
+
+/* -------------- Walkie Talkie: human swap (discard <-> hand) -------------- */
+async function runWalkieSwapFor(ownerKey, walkieFieldCard) {
+  const P = duelState.players?.[ownerKey];
+  if (!P) return;
+  ensureArrays(P);
+
+  if (!Array.isArray(P.discardPile) || P.discardPile.length === 0) return;
+  if (!Array.isArray(P.hand) || P.hand.length === 0) return;
+
+  // pick from discard
+  const pickDiscard = await presentCardPicker(P.discardPile, { title: 'Pick a card FROM YOUR DISCARD' });
+  if (!pickDiscard) return;
+  const discardIdx = pickDiscard.index;
+
+  // pick from hand
+  const pickHand = await presentCardPicker(P.hand, { title: 'Pick a card FROM YOUR HAND to swap' });
+  if (!pickHand) return;
+  const handIdx = pickHand.index;
+
+  // perform swap (keep objects)
+  const fromDiscard = P.discardPile.splice(discardIdx, 1)[0];
+  const fromHand    = P.hand.splice(handIdx, 1, fromDiscard)[0]; // put discard card into hand
+  P.discardPile.push(fromHand); // put the original hand card into discard
+
+  // After use, Walkie Talkie is consumable → move the field card to discard
+  if (walkieFieldCard) {
+    moveFieldCardToDiscard(ownerKey, walkieFieldCard);
+  }
+
+  // refresh UI
+  renderZones();
+  updateDiscardCounters();
+}
+
 /* ------ category draw (needed for bot “draw 1 loot/defense…” cards) ------ */
 function drawFromDeckWhere(playerKey, predicate) {
   const P = duelState.players[playerKey];
@@ -460,6 +546,33 @@ function resolveBotNonTrapCardsOnce() {
 
       // Do NOT auto-discard anymore; wait for end of bot's turn.
       card._resolvedByUI = true;
+    }
+  }
+}
+
+/** Scan human field for newly-placed non-traps and resolve them once. */
+async function resolveHumanNonTrapCardsOnce() {
+  const human = duelState?.players?.player1;
+  if (!human || !Array.isArray(human.field)) return;
+  for (const card of human.field.slice()) {
+    if (card && !card.isFaceDown && !isTrap(card.cardId) && !card._resolvedByUI) {
+      const meta = getMeta(card.cardId);
+      // Walkie Talkie = interactive swap
+      const n = String(meta?.name || '').toLowerCase();
+      const text = `${String(meta?.effect || '')} ${String(meta?.logic_action || '')}`.toLowerCase();
+      if (n.includes('walkie') || /swap\s+one\s+card/.test(text)) {
+        await runWalkieSwapFor('player1', card);
+        card._resolvedByUI = true;
+        continue;
+      }
+      // non-interactive effects can reuse the existing resolver
+      resolveImmediateEffect(meta, 'player1');
+      card._resolvedByUI = true;
+
+      // if the card says "discard after use", toss it now
+      if (shouldAutoDiscard(meta)) {
+        moveFieldCardToDiscard('player1', card);
+      }
     }
   }
 }
@@ -953,11 +1066,11 @@ async function maybeRunBotTurn() {
     }
 
     // If bot handed the turn back, show the final board state briefly,
-    // then clean up: bot ephemerals + BOT fired traps (owner clears at end of their own turn).
+    // then clean up: bot ephemerals + YOUR fired traps (they fired during the bot's turn).
     if (duelState.currentPlayer === 'player1') {
       await wait(1500);                 // short visible hold before clearing
       cleanupEndOfTurnLocal('player2'); // clear bot's non-persistent & fired traps
-      purgeFiredTraps('player2');       // clear bot traps that fired during YOUR previous turn
+      purgeFiredTraps('player1');       // ← correct owner to purge here
       // clear reconciliation memory for next bot turn
       duelState._uiPlayedThisTurn = [];
     }
@@ -1004,6 +1117,9 @@ export async function renderDuelUI() {
   // ⚙️ Resolve any new, face-up bot cards (non-traps) once (no auto-discard)
   resolveBotNonTrapCardsOnce();
 
+  // ✅ NEW: resolve human face-up non-traps that need interaction (e.g., Walkie Talkie)
+  await resolveHumanNonTrapCardsOnce();
+  
   renderZones();
   setHpText();
   setTurnText();
