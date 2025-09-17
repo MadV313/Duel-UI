@@ -302,7 +302,7 @@ function destroyEnemyInfected(playerKey) {
 }
 
 /* ---------- TRAP SYSTEM ---------- */
-/** Flip + resolve the first facedown trap on defender. It remains on field until End Turn. */
+/** Flip → render → resolve the first facedown trap on defender. It remains on field until End Turn. */
 function triggerOneTrap(defenderKey) {
   console.log('[trap] attempting to fire for defender:', defenderKey);
   const D = duelState.players[defenderKey];
@@ -313,15 +313,22 @@ function triggerOneTrap(defenderKey) {
   if (idx < 0) return false;
 
   const trap = D.field[idx];
-  trap.isFaceDown = false;
-  trap._fired = true;
+  trap.isFaceDown = false;   // reveal now (visual)
+  trap._fired = true;        // mark for End Turn cleanup
 
   const meta = getMeta(trap.cardId);
-  console.log('[trap] fired', { defender: defenderKey, cardId: trap.cardId, name: meta?.name });
+  console.log('[trap] flipped', { defender: defenderKey, cardId: trap.cardId, name: meta?.name });
 
-  resolveImmediateEffect(meta, defenderKey);
-  trap._resolvedByUI = true;
-  triggerAnimation('trap');
+  // Force a frame so the player sees the flip BEFORE the effect resolves.
+  try { _renderDuelUI(); } catch {}
+
+  requestAnimationFrame(() => {
+    console.log('[trap] resolving', { defender: defenderKey, cardId: trap.cardId, name: meta?.name });
+    resolveImmediateEffect(meta, defenderKey);
+    trap._resolvedByUI = true; // avoid double resolves
+    triggerAnimation('trap');
+  });
+
   return true;
 }
 
@@ -332,7 +339,8 @@ function trapAutoTriggersNow(meta) {
 }
 
 /**
- * Resolve immediate effects for non-traps (and any legacy auto-triggers if re-enabled).
+ * Resolve immediate effects for any non-trap card.
+ * (Trap retaliation is handled by the caller after this resolves.)
  */
 function resolveImmediateEffect(meta, ownerKey) {
   if (!meta) return;
@@ -342,28 +350,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   ensureZones(duelState.players[you]);
   ensureZones(duelState.players[foe]);
 
-  // Breadcrumb before trap decision
-  const type = txt(meta.type);
-  const name = String(meta.name || '').toLowerCase();
-  const tags = tagset(meta);
-
-  console.log('[trap-check]', {
-    owner: you,
-    foe,
-    cardId: meta.card_id ?? meta.cardId ?? '(unknown)',
-    name: meta.name,
-    type,
-    infectedTag: tags.has('infected'),
-  });
-
-  const isAtkOrInf =
-    type === 'attack' ||
-    type === 'infected' ||
-    tags.has('infected') ||
-    /infected/.test(name);
-
-  if (isAtkOrInf) triggerOneTrap(foe);
-
+  const type = txt(meta.type); // keep for infected-specific logic later
   const etext = `${txt(meta.effect)} ${txt(meta.logic_action)}`;
 
   // ---------- DAMAGE ----------
@@ -571,8 +558,17 @@ function resolveUnresolvedNonTrapsOnceFor(ownerKey) {
     const meta = getMeta(typeof card === 'object' ? card.cardId : card);
     if (!meta || isTrapMeta(meta)) continue; // traps don't resolve here
     console.log('[auto-resolve]', { owner: ownerKey, cardId: card.cardId, name: meta?.name });
-    resolveImmediateEffect(meta, ownerKey);  // this will triggerOneTrap(defender) if needed
+
+    // 1) Resolve the attacker/infected card first
+    resolveImmediateEffect(meta, ownerKey);
     card._resolvedByUI = true;
+
+    // 2) Then allow exactly one enemy trap to retaliate
+    const t = txt(meta.type);
+    if (t === 'attack' || t === 'infected') {
+      const defender = ownerKey === 'player1' ? 'player2' : 'player1';
+      triggerOneTrap(defender);
+    }
   }
 }
 
@@ -676,7 +672,7 @@ export function drawCard() {
  * - Interactive plays allowed only for local human (player1)
  * - Field has 3 slots (UI guard)
  * - Traps stay face-down and DO NOT trigger immediately
- * - Non-traps resolve immediately; if they're Attack/Infected, they can trigger opponent traps
+ * - Non-traps resolve immediately; if they're Attack/Infected, they can trigger opponent traps AFTER resolving
  */
 export function playCard(cardIndex) {
   const playerKey = duelState.currentPlayer;      // 'player1' | 'player2'
@@ -722,9 +718,16 @@ export function playCard(cardIndex) {
     return;
   }
 
-  // Now resolve the non-trap; resolveImmediateEffect will flip an enemy trap first if needed
+  // Resolve the played non-trap first
   resolveImmediateEffect(meta, playerKey);
   card._resolvedByUI = true;
+
+  // Then allow exactly one enemy trap to retaliate
+  const foe = playerKey === 'player1' ? 'player2' : 'player1';
+  const type = txt(meta.type);
+  if (type === 'attack' || type === 'infected') {
+    triggerOneTrap(foe);
+  }
 
   triggerAnimation('combo');
   renderDuelUI();
