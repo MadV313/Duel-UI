@@ -42,7 +42,7 @@ const isPracticeMode =
 let botTurnInFlight = false;
 
 // UI-enforced limits (keeps display sane even if backend misbehaves)
-const MAX_FIELD_SLOTS = 3;
+const MAX_FIELD_SLOTS = 4;
 const MAX_HP = 200;
 const MAX_HAND = 4;
 
@@ -80,12 +80,30 @@ function hasTag(meta, ...tags) {
   return tags.some(t => set.has(String(t).toLowerCase()));
 }
 
+function asInt(id) {
+  const n = Number(String(id).replace(/\D/g, ''));
+  return Number.isFinite(n) ? n : -1;
+}
+
+// Traps are #106–#120 in your master list.
+// Use this as a fallback when meta is missing/out-of-sync.
+function isTrapIdByRange(cardId) {
+  const n = asInt(cardId);
+  return n >= 106 && n <= 120;
+}
+
 function isTrap(cardId) {
   const m = getMeta(cardId);
-  // robust detection: type "trap" OR tag includes "trap" OR the card name includes the word "trap"
   const t = String(m?.type || '').toLowerCase();
   const name = String(m?.name || '').toLowerCase();
-  return t === 'trap' || hasTag(m, 'trap') || /\btrap\b/.test(name);
+
+  // Primary signals
+  if (t === 'trap') return true;
+  if (hasTag(m, 'trap')) return true;
+  if (/\btrap\b/.test(name)) return true;
+
+  // Fallback: id range (106–120) — covers cases where meta isn't loaded/merged yet
+  return isTrapIdByRange(cardId);
 }
 
 function looksInfected(meta) {
@@ -595,42 +613,41 @@ async function botAutoPlayAssist() {
     const idx = bot.hand.findIndex(h => (h.cardId ?? h) === (entry.cardId ?? entry));
     if (idx === -1 || !fieldHasRoom()) return false;
     const [card] = bot.hand.splice(idx, 1);
-
+  
     const cid = (typeof card === 'object' && card !== null)
       ? (card.cardId ?? card.id ?? card.card_id)
       : card;
-
-    // Start with the caller's hint…
+  
+    // ⬇️ ADD/KEEP THIS EXACT BLOCK HERE
     const final = { cardId: pad3(cid), isFaceDown: !!faceDownHint };
-
-    // 🚫 Hard rule: traps are ALWAYS set face-down until they fire.
+  
+    // Hard rule: traps are ALWAYS set face-down until they fire.
+    // Use strict detector so missing meta can’t flip them up.
     if (isTrap(final.cardId)) final.isFaceDown = true;
-
+  
     bot.field.push(final);
     console.log('[bot] place', { id: final.cardId, faceDown: final.isFaceDown });
-    renderZones();               // immediate visual
-    await wait();                // visible "place" beat
-
-    // remember locally-placed bot cards for reconciliation after server merge
+    renderZones();
+    await wait();
+  
     duelState._uiPlayedThisTurn ||= [];
     duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
-
+  
     const meta = getMeta(final.cardId);
-
+  
     if (!final.isFaceDown) {
-      // Only resolve *visible* (non-trap) cards immediately.
       resolveImmediateEffect(meta, 'player2');
       final._resolvedByUI = true;
-      console.log('[bot] resolve', { id: final.cardId, type: meta?.type });
       setHpText();
-      await wait();              // time for damage/heal animations
+      await wait();
     } else {
-      // Facedown set — give it a short beat on screen.
       await wait();
     }
-
+  
     return true;
   };
+
+    // after defining playOne, add the selection logic and close the function
 
   if (!fieldHasRoom()) return false;
 
@@ -641,7 +658,7 @@ async function botAutoPlayAssist() {
   });
   if (iNT !== -1) return await playOne(bot.hand[iNT], false);
 
-  // Otherwise, set one trap face-down
+  // Otherwise set the first trap face-down
   const iTrap = bot.hand.findIndex(e => {
     const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
     return isTrap(cid);
@@ -649,7 +666,7 @@ async function botAutoPlayAssist() {
   if (iTrap !== -1) return await playOne(bot.hand[iTrap], true);
 
   return false;
-}
+} // <-- this closes botAutoPlayAssist()
 
 /* ------------------ display helpers ------------------ */
 function nameOf(playerKey) {
@@ -760,9 +777,11 @@ function toEntry(objOrId, defaultFaceDown = false) {
 // Field entries: non-traps must be face-UP; traps face-DOWN *unless they have fired*.
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
+  // If it's a trap by strict rules, keep it face-down unless it has fired.
   if (isTrap(base.cardId)) {
     base.isFaceDown = base._fired ? false : true;
   } else {
+    // Non-traps must be face-up.
     base.isFaceDown = false;
   }
   return base;
