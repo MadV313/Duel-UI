@@ -3,6 +3,7 @@ import { renderHand } from './renderHand.js';
 import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 import { API_BASE, UI_BASE } from './config.js';
+import { audio, installSoundToggleUI } from './audio.js';
 
 /* ---------------- constants ---------------- */
 const MAX_HP = 200;
@@ -473,6 +474,7 @@ function triggerOneTrap(defenderKey) {
 
   const meta = getMeta(trap.cardId);
   resolveImmediateEffect(meta, defenderKey);
+  audio.playForCard(getMeta(trap.cardId), 'fire');   // trap_fire or card-specific
 
   try { console.log('[trap] fired', { owner: defenderKey, id: trap.cardId }); } catch {}
   return true;
@@ -499,17 +501,24 @@ function resolveImmediateEffect(meta, ownerKey) {
 
   // damage
   const dmg = damageFromText(text);
-  if (dmg > 0) changeHP(foe, -dmg);
+  if (dmg > 0) {
+    changeHP(foe, -dmg);
+    audio.play('attack_hit.mp3');
+  }
 
   // heal
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
-  if (mHeal) changeHP(you, +Number(mHeal[1]));
+  if (mHeal) {
+    changeHP(you, +Number(mHeal[1]));
+    audio.play('heal.mp3');
+  }
 
   // draws
   const mDraw = text.match(/draw\s+(a|\d+)\s+(?:card|cards)/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
+    audio.play('draw.mp3');
   }
 
   // category draws
@@ -541,6 +550,8 @@ function resolveImmediateEffect(meta, ownerKey) {
   // traps
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
+
+  audio.playForCard(meta, 'resolve');
 
   detectWinner();
 }
@@ -607,6 +618,7 @@ async function botAutoPlayAssist() {
     console.log('[bot] place', { id: final.cardId, faceDown: final.isFaceDown });
     renderZones();
     await wait();
+    audio.playForCard(getMeta(final.cardId), 'place'); // trap_set or card_place
 
     duelState._uiPlayedThisTurn ||= [];
     duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
@@ -1169,6 +1181,13 @@ function buildSummary() {
 export async function renderDuelUI() {
   await ensureAllCardsLoaded();
 
+  audio.configure({
+    bgSrc: '/audio/bg/winter_theme.mp3',
+    sfxBase: '/audio/sfx/',
+  });
+  audio.initAutoplayUnlock();
+  installSoundToggleUI();
+
   detectWinner();
 
   try {
@@ -1178,6 +1197,11 @@ export async function renderDuelUI() {
       document.body.classList.remove('duel-ready');
     }
   } catch {}
+
+  // start background music once the duel starts
+  if (duelState?.started && !audio.isBgPlaying()) {
+    audio.startBg(); // starts /audio/bg/winter_theme.mp3 looping
+  }
 
   clampFields(duelState);
   startTurnDrawIfNeeded();
