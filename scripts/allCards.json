@@ -1491,7 +1491,7 @@
         "image":"106_BearTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"  
         } 
     },
@@ -1506,7 +1506,7 @@
         "image":"107_TripwireTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"  
         } 
     },
@@ -1521,7 +1521,7 @@
         "image":"108_Landmine_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
           "fire": "explosion.mp3"
         }
     },
@@ -1536,7 +1536,7 @@
         "image":"109_MakeshiftCharge_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
           "fire": "explosion.mp3"
         }
     },
@@ -1551,7 +1551,7 @@
         "image":"110_PerimeterTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "explosion.mp3"
         }
     },
@@ -1566,7 +1566,7 @@
         "image":"111_FireBarrelTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1581,7 +1581,7 @@
         "image":"112_WireSnare_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1596,7 +1596,7 @@
         "image":"113_SpikedLogTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1611,7 +1611,7 @@
         "image":"114_ExplosiveGrenadeTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
           "fire": "explosion.mp3"
         }
     },
@@ -1626,7 +1626,7 @@
         "image":"115_GasCanisterTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1641,7 +1641,7 @@
         "image":"116_FlareDistraction_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1656,7 +1656,7 @@
         "image":"117_AlarmTripwire_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1671,7 +1671,7 @@
         "image":"118_SpringloadedBreachTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
@@ -1686,7 +1686,7 @@
         "image":"119_IEDPressurePlate_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
           "fire": "explosion.mp3"
         }
     },
@@ -1701,7 +1701,7 @@
         "image":"120_SwingingSpikedBat_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav",
           "fire": "trap sounds.mp3"    
         } 
     },
