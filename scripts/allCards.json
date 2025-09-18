@@ -1139,7 +1139,7 @@
         "tags":"explosive, aoe",
         "card_animation":null,
         "image":"081_Dynamite_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
         "sfx": {
           "resolve": "explosion.mp3"
         }
