@@ -1182,7 +1182,7 @@ export async function renderDuelUI() {
   await ensureAllCardsLoaded();
 
   audio.configure({
-    bgSrc: '/audio/bg/winter_theme.mp3',
+    bgSrc: '/audio/bg/Follow the Trail.mp3',
     sfxBase: '/audio/sfx/',
   });
   audio.initAutoplayUnlock();
@@ -1200,7 +1200,7 @@ export async function renderDuelUI() {
 
   // start background music once the duel starts
   if (duelState?.started && !audio.isBgPlaying()) {
-    audio.startBg(); // starts /audio/bg/winter_theme.mp3 looping
+    audio.startBg(); // starts /audio/bg/Follow the Trail.mp3 looping
   }
 
   clampFields(duelState);
