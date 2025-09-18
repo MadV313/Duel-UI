@@ -120,6 +120,49 @@ function ensureArrays(p) {
   p.buffs ||= {};
 }
 
+/* ---------- Human “place” SFX detector (player1 only) ---------- */
+const _lastFieldCounts = { player1: new Map() };
+const _firstSeenField = { player1: true };
+
+function countByCardId(list) {
+  const m = new Map();
+  (list || []).forEach(e => {
+    const id = pad3(e?.cardId ?? e?.id ?? e?.card_id ?? '000');
+    if (!id || id === '000') return;
+    m.set(id, (m.get(id) || 0) + 1);
+  });
+  return m;
+}
+
+/** Plays 'place' SFX for newly added cards to player1's field. */
+function playPlaceSfxForNewFieldCards(playerKey = 'player1') {
+  const P = duelState?.players?.[playerKey];
+  if (!P) return;
+  const curr = countByCardId(P.field);
+  const prev = _lastFieldCounts[playerKey] || new Map();
+
+  // skip noise on first render
+  if (_firstSeenField[playerKey]) {
+    _firstSeenField[playerKey] = false;
+    _lastFieldCounts[playerKey] = curr;
+    return;
+  }
+
+  // compute positive deltas (new placements)
+  for (const [id, now] of curr.entries()) {
+    const was = prev.get(id) || 0;
+    const delta = now - was;
+    if (delta > 0) {
+      const meta = getMeta(id);
+      for (let i = 0; i < delta; i++) {
+        audio.playForCard(meta, 'place'); // trap_set or card_place based on meta/type
+      }
+    }
+  }
+
+  _lastFieldCounts[playerKey] = curr;
+}
+
 /* ---------------- winner detection ---------------- */
 function detectWinner() {
   try {
@@ -289,19 +332,20 @@ function shouldAutoDiscard(meta) {
   return patterns.some(rx => rx.test(effect) || rx.test(logic));
 }
 
-function moveFieldCardToDiscard(playerKey, cardObj, opts = {}) {
+function moveFieldCardToDiscard(playerKey, cardObj) {
   const P = duelState.players[playerKey];
   ensureArrays(P);
   const i = P.field.indexOf(cardObj);
   if (i !== -1) {
     const [c] = P.field.splice(i, 1);
-    P.discardPile.push(c);
 
-    // 🎵 per-card discard SFX
-    try {
-      const meta = getMeta(c?.cardId ?? c?.id ?? c?.card_id);
-      if (!opts.silent) audio.playForCard(meta, 'discard');
-    } catch {}
+    // 🔊 discard SFX (card-specific if provided)
+    const meta = getMeta(c?.cardId);
+    if (playerKey === 'player1') {
+      audio.playForCard(meta, 'discard');
+    }
+
+    P.discardPile.push(c);
   }
 }
 
@@ -311,8 +355,9 @@ function discardRandomTrap(playerKey) {
   const i = P.field.findIndex(c => c && isTrap(c.cardId));
   if (i !== -1) {
     const [c] = P.field.splice(i, 1);
+    const meta = getMeta(c?.cardId);
+    if (playerKey === 'player1') audio.playForCard(meta, 'discard');
     P.discardPile.push(c);
-    try { audio.playForCard(getMeta(c.cardId), 'discard'); } catch {}
     return true;
   }
   return false;
@@ -336,8 +381,9 @@ function destroyEnemyInfected(foeKey) {
   const idx = P.field.findIndex(c => looksInfected(getMeta(c.cardId)));
   if (idx !== -1) {
     const [c] = P.field.splice(idx, 1);
+    const meta = getMeta(c?.cardId);
+    if (foeKey === 'player1') audio.playForCard(meta, 'discard');
     P.discardPile.push(c);
-    try { audio.playForCard(getMeta(c.cardId), 'discard'); } catch {}
     return true;
   }
   return false;
@@ -414,11 +460,6 @@ function purgeFiredTraps(ownerKey) {
   if (moved.length) {
     P.discardPile.push(...moved);
 
-    // 🎵 discard SFX for fired traps
-    try {
-      moved.forEach(c => audio.playForCard(getMeta(c.cardId), 'discard'));
-    } catch {}
-
     try {
       const toRemove = new Set(moved.map(c => c.cardId));
       const marks = firedTrapMarks();
@@ -463,9 +504,11 @@ function cleanupEndOfTurnLocal(playerKey) {
   } catch {}
 
   if (toss.length) {
+    toss.forEach(c => {
+      const meta = getMeta(c?.cardId);
+      if (playerKey === 'player1') audio.playForCard(meta, 'discard');
+    });
     P.discardPile.push(...toss);
-    // optional: mild discard sound (generic), not per-card to reduce noise
-    try { if (toss.length) audio.play('discard.mp3'); } catch {}
     try {
       toss.forEach(c => console.log('[cleanup] moved to discard', { owner: playerKey, id: c.cardId, reason: c._cleanupReason || 'unknown' }));
     } catch {}
@@ -553,8 +596,9 @@ function resolveImmediateEffect(meta, ownerKey) {
       const idx = /random/.test(text) ? Math.floor(Math.random() * foeField.length) : 0;
       const [destroyed] = foeField.splice(idx, 1);
       duelState.players[foe].discardPile ||= [];
+      const dMeta = getMeta(destroyed?.cardId);
+      if (foe === 'player1') audio.playForCard(dMeta, 'discard');
       duelState.players[foe].discardPile.push(destroyed);
-      try { audio.play('destroy.mp3'); } catch {}
     }
   }
 
@@ -567,7 +611,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
-  // 🎵 per-card resolve sfx (e.g., weapon shots)
+  // 🔊 per-card resolve SFX (if defined) or sensible fallback
   audio.playForCard(meta, 'resolve');
 
   detectWinner();
@@ -591,10 +635,15 @@ function resolveBotNonTrapCardsOnce() {
 async function resolveHumanNonTrapCardsOnce() {
   const human = duelState?.players?.player1;
   if (!human || !Array.isArray(human.field)) return;
+
   for (const card of human.field.slice()) {
     if (duelState.winner) break;
     if (card && !card.isFaceDown && !isTrap(card.cardId) && !card._resolvedByUI) {
       const meta = getMeta(card.cardId);
+
+      // 🔊 ensure a placement sound for human visible cards (non-traps)
+      audio.playForCard(meta, 'place');
+
       const n = String(meta?.name || '').toLowerCase();
       const text = `${String(meta?.effect || '')} ${String(meta?.logic_action || '')}`.toLowerCase();
       if (n.includes('walkie') || /swap\s+one\s+card/.test(text)) {
@@ -605,11 +654,7 @@ async function resolveHumanNonTrapCardsOnce() {
       resolveImmediateEffect(meta, 'player1');
       card._resolvedByUI = true;
 
-      if (shouldAutoDiscard(meta)) {
-        // Play discard right before moving the card off the field
-        audio.playForCard(meta, 'discard');
-        moveFieldCardToDiscard('player1', card, { silent: true });
-      }
+      if (shouldAutoDiscard(meta)) moveFieldCardToDiscard('player1', card);
     }
   }
 }
@@ -992,7 +1037,6 @@ async function maybeRunBotTurn() {
           bot.field.push(final);
           renderZones();
           await wait();
-          audio.playForCard(getMeta(final.cardId), 'place');
           const meta = getMeta(final.cardId);
           if (!final.isFaceDown) {
             resolveImmediateEffect(meta, 'player2');
@@ -1229,6 +1273,10 @@ export async function renderDuelUI() {
   startTurnDrawIfNeeded();
   reapplyFiredTrapFaceState();
   resolveBotNonTrapCardsOnce();
+
+  // 🔊 detect newly placed player1 field cards and play 'place' before resolving effects
+  playPlaceSfxForNewFieldCards('player1');
+
   await resolveHumanNonTrapCardsOnce();
   enforceFacedownUnfiredTraps('player1');
   enforceFacedownUnfiredTraps('player2');
