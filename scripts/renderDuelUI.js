@@ -15,7 +15,6 @@ const MIN_TURN_MS = 7500;    // min visible bot turn ~7.5s
 const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
 
 /* ---------------- allCards loader ---------------- */
-// single source of truth; no import assertions needed
 let allCards = [];
 let allCardsReady = false;
 let allCardsLoading = null;
@@ -24,12 +23,11 @@ async function ensureAllCardsLoaded() {
   if (allCardsReady) return;
   if (allCardsLoading) { await allCardsLoading; return; }
 
-  // robust path sequence for your repo layout: Duel-UI/scripts/allCards.json
   const CANDIDATES = [
-    '/scripts/allCards.json',    // ✅ absolute (preferred on Railway)
-    './scripts/allCards.json',   // relative fallback
-    './allCards.json',           // legacy relative
-    '/allCards.json',            // last-ditch absolute root
+    '/scripts/allCards.json',
+    './scripts/allCards.json',
+    './allCards.json',
+    '/allCards.json',
   ];
 
   allCardsLoading = (async () => {
@@ -38,7 +36,6 @@ async function ensureAllCardsLoaded() {
       try {
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        // Some hosts send wrong content-type; still try to parse JSON.
         const text = await res.text();
         try {
           allCards = JSON.parse(text);
@@ -53,8 +50,8 @@ async function ensureAllCardsLoaded() {
       }
     }
     console.error('[UI] Failed to load allCards.json from any candidate path:', lastErr);
-    allCards = [];         // keep UI functional without metadata
-    allCardsReady = true;  // prevent infinite retries
+    allCards = [];
+    allCardsReady = true;
   })();
 
   await allCardsLoading;
@@ -130,14 +127,14 @@ function detectWinner() {
     const p2 = Number(duelState?.players?.player2?.hp ?? MAX_HP);
 
     if (p1 <= 0 && p2 <= 0) {
-      duelState.winner = 'player1'; // tie-breaker policy
+      duelState.winner = 'player1'; // tie-breaker
     } else if (p1 <= 0) {
       duelState.winner = 'player2';
     } else if (p2 <= 0) {
       duelState.winner = 'player1';
     }
     if (duelState.winner) {
-      duelState.started = true; // ensure UI shows result text
+      duelState.started = true;
       console.log('[win] detected:', duelState.winner);
     }
     return duelState.winner || null;
@@ -162,7 +159,7 @@ function drawFor(playerKey) {
   if (P.hand.length >= MAX_HAND) return false;
   if (P.deck.length === 0) return false;
   const top = P.deck.shift();
-  const entry = toEntry(top, playerKey === 'player2'); // bot hand is face-down visually
+  const entry = toEntry(top, playerKey === 'player2'); // bot hand face-down visually
   P.hand.push(entry);
   return true;
 }
@@ -372,7 +369,7 @@ function isPersistentOnField(meta) {
   if (!meta) return false;
   const t = String(meta.type || '').toLowerCase();
   if (t === 'defense') return true;
-  if (t === 'trap') return true; // traps stay set until they fire
+  if (t === 'trap') return true;
   const tags = new Set(tagsOf(meta));
   return tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor');
 }
@@ -495,42 +492,37 @@ function resolveImmediateEffect(meta, ownerKey) {
     tags.has('infected') ||
     /\binfected\b/.test(name);
 
-  if (isAtkOrInf) {
-    triggerOneTrap(foe);
-  }
-
+  if (isAtkOrInf) triggerOneTrap(foe);
   if (!meta) return;
 
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
 
-  // --- damage
+  // damage
   const dmg = damageFromText(text);
   if (dmg > 0) changeHP(foe, -dmg);
 
-  // --- heal
+  // heal
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) changeHP(you, +Number(mHeal[1]));
 
-  // --- draws
+  // draws
   const mDraw = text.match(/draw\s+(a|\d+)\s+(?:card|cards)/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
   }
 
-  // --- category draws
+  // category draws
   if (/draw\s+1\s+loot\s+card/.test(text))     drawFromDeckWhere(you, isType('loot'));
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
   if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
-  // --- skip next draw
-  if (/skip\s+next\s+draw/.test(text)) {
-    duelState.players[you].skipNextDraw = true;
-  }
+  // skip next draw
+  if (/skip\s+next\s+draw/.test(text)) duelState.players[you].skipNextDraw = true;
 
-  // --- destroy/remove enemy field card
+  // destroy/remove enemy field card
   if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
     const foeField = duelState.players[foe].field || [];
     if (foeField.length) {
@@ -541,20 +533,16 @@ function resolveImmediateEffect(meta, ownerKey) {
     }
   }
 
-  // --- infected targets
+  // infected targets
   if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(text)) {
     destroyEnemyInfected(foe);
   }
 
-  // --- traps
-  if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) {
-    discardRandomTrap(foe);
-  }
-  if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) {
-    revealRandomEnemyTrap(foe);
-  }
+  // traps
+  if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
+  if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
-  detectWinner(); // ensure end-of-duel triggers
+  detectWinner();
 }
 
 /** Scan bot field for newly-placed non-traps and resolve them once (no auto-discard here). */
@@ -589,14 +577,12 @@ async function resolveHumanNonTrapCardsOnce() {
       resolveImmediateEffect(meta, 'player1');
       card._resolvedByUI = true;
 
-      if (shouldAutoDiscard(meta)) {
-        moveFieldCardToDiscard('player1', card);
-      }
+      if (shouldAutoDiscard(meta)) moveFieldCardToDiscard('player1', card);
     }
   }
 }
 
-/* ---------------- Bot auto-play assist (client-side safety net) ---------------- */
+/* ---------------- Bot auto-play assist ---------------- */
 async function botAutoPlayAssist() {
   const bot = duelState?.players?.player2;
   if (!bot) return false;
@@ -641,14 +627,12 @@ async function botAutoPlayAssist() {
 
   if (!fieldHasRoom()) return false;
 
-  // Prefer a visible non-trap
   const iNT = bot.hand.findIndex(e => {
     const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
     return !isTrap(cid);
   });
   if (iNT !== -1) return await playOne(bot.hand[iNT], false);
 
-  // Otherwise set the first trap face-down
   const iTrap = bot.hand.findIndex(e => {
     const cid = (typeof e === 'object' && e !== null) ? (e.cardId ?? e.id ?? e.card_id) : e;
     return isTrap(cid);
@@ -705,7 +689,7 @@ function setHpText() {
   } catch {}
 }
 
-/* --------- discard counter helpers (UI only) --------- */
+/* --------- discard counter helpers --------- */
 function counterId(player) { return `${player}-discard-counter`; }
 
 function ensureCounterNode(afterNode, playerLabel = '') {
@@ -745,7 +729,6 @@ function updateDiscardCounters() {
 /* ------------------ state normalizers ------------------ */
 function asIdString(id) { return pad3(id); }
 
-// 🔒 Preserve `_fired` when normalizing
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
@@ -758,7 +741,6 @@ function toEntry(objOrId, defaultFaceDown = false) {
   return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown), _fired: false };
 }
 
-// Field entries: non-traps face-UP; traps face-DOWN unless fired.
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
   if (isTrap(base.cardId)) {
@@ -839,22 +821,15 @@ function mergeServerIntoUI(server) {
     P.deck = Array.isArray(P.deck) ? P.deck.map(e => toEntry(e, false)) : [];
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
 
-    // Mask opponent hand visually
-    if (pk === 'player2') {
-      P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
-    }
+    if (pk === 'player2') P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
   });
 
-  // practice-mode friendly reconciliation of locally-set traps/plays
   if (localBot && next?.players?.player2) {
     const nextBot = next.players.player2;
-
     const serverField = Array.isArray(nextBot.field) ? nextBot.field : [];
     const localField  = Array.isArray(localBot.field) ? localBot.field : [];
 
-    if (localField.length > serverField.length) {
-      nextBot.field = localField.map(toFieldEntry);
-    }
+    if (localField.length > serverField.length) nextBot.field = localField.map(toFieldEntry);
 
     if (Array.isArray(nextBot.hand) && locallyPlayed.length) {
       const playedSet = new Set(locallyPlayed.map(p => pad3(p.cardId)));
@@ -889,16 +864,13 @@ async function postBotTurn(payload) {
   return res;
 }
 
-// Keep any unfired traps face-down (visual guarantee)
 function enforceFacedownUnfiredTraps(ownerKey) {
   const P = duelState.players?.[ownerKey];
   if (!P || !Array.isArray(P.field)) return;
   for (const card of P.field) {
     const cid = card?.cardId ?? card?.id ?? card?.card_id;
     if (!cid) continue;
-    if (isTrap(cid) && !card._fired) {
-      card.isFaceDown = true;
-    }
+    if (isTrap(cid) && !card._fired) card.isFaceDown = true;
   }
 }
 
@@ -911,7 +883,7 @@ const isPracticeMode =
 async function maybeRunBotTurn() {
   if (botTurnInFlight) return;
   if (isSpectator) return;
-  if (duelState.winner) return;              // ← don't run if duel already over
+  if (duelState.winner) return;
   if (!duelState?.started) return;
   if (duelState.currentPlayer !== 'player2') return;
 
@@ -1014,9 +986,7 @@ async function maybeRunBotTurn() {
     }
   } finally {
     const elapsed = Date.now() - turnStart;
-    if (elapsed < MIN_TURN_MS) {
-      await wait(MIN_TURN_MS - elapsed);
-    }
+    if (elapsed < MIN_TURN_MS) await wait(MIN_TURN_MS - elapsed);
 
     if (!duelState.winner && duelState.currentPlayer === 'player1') {
       await wait(1500);
@@ -1082,11 +1052,123 @@ function renderZones() {
   renderField('player2', isSpectator);
 }
 
+/* ---------------- winner overlay ---------------- */
+function showWinnerOverlay() {
+  if (document.getElementById('duel-summary-overlay')) return; // only once
+
+  const winnerKey = duelState.winner;
+  const loserKey  = winnerKey === 'player1' ? 'player2' : 'player1';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'duel-summary-overlay';
+  overlay.style.cssText = `
+    position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:10000;
+    display:flex; align-items:center; justify-content:center; padding:24px;`;
+
+  const panel = document.createElement('div');
+  panel.style.cssText = `
+    background:#0f1114; color:#e6e6e6; width:min(900px, 96vw); border-radius:16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); padding:22px 22px 16px;`;
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:24px; font-weight:800; margin-bottom:6px;';
+  title.textContent = `🏆 Winner: ${nameOf(winnerKey)} (${winnerKey})`;
+
+  const sub = document.createElement('div');
+  sub.style.cssText = 'opacity:.8; margin-bottom:14px;';
+  sub.textContent = 'Duel Summary';
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:14px;';
+
+  const cardFor = (key, label) => {
+    const P = duelState.players[key];
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid #26303a; border-radius:12px; padding:12px;';
+    const h = document.createElement('div');
+    h.style.cssText = 'font-weight:700; margin-bottom:8px;';
+    h.textContent = `${label} — ${nameOf(key)}`;
+    const list = document.createElement('div');
+    list.innerHTML = `
+      <div>HP: <b>${P.hp}</b></div>
+      <div>Field: <b>${(P.field||[]).length}</b></div>
+      <div>Hand: <b>${(P.hand||[]).length}</b></div>
+      <div>Deck: <b>${(P.deck||[]).length}</b></div>
+      <div>Discard: <b>${(P.discardPile||[]).length}</b></div>
+    `;
+    wrap.appendChild(h); wrap.appendChild(list);
+    return wrap;
+  };
+
+  grid.appendChild(cardFor(winnerKey, 'Winner'));
+  grid.appendChild(cardFor(loserKey, 'Opponent'));
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex; gap:10px; justify-content:flex-end; margin-top:14px;';
+
+  const playAgain = document.createElement('button');
+  playAgain.textContent = 'Play Again';
+  playAgain.style.cssText = 'padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#16202a; color:#e6e6e6; cursor:pointer;';
+  playAgain.onclick = () => { window.location.href = `${UI_BASE}/?mode=practice`; };
+
+  const toHub = document.createElement('a');
+  toHub.textContent = 'Return to Hub';
+  toHub.href = `${UI_BASE}/`;
+  toHub.style.cssText = 'padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#0d141a; color:#e6e6e6; text-decoration:none;';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = 'Copy Summary JSON';
+  copyBtn.style.cssText = 'margin-right:auto; padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#1a2530; color:#e6e6e6; cursor:pointer;';
+  copyBtn.onclick = () => {
+    const payload = buildSummary();
+    navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).catch(()=>{});
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => copyBtn.textContent = 'Copy Summary JSON', 1200);
+  };
+
+  actions.appendChild(copyBtn);
+  actions.appendChild(playAgain);
+  actions.appendChild(toHub);
+
+  panel.appendChild(title);
+  panel.appendChild(sub);
+  panel.appendChild(grid);
+  panel.appendChild(actions);
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
+function buildSummary() {
+  const duelId = `duel_${Date.now()}`;
+  return {
+    duelId,
+    winner: duelState.winner,
+    hp: {
+      player1: duelState.players.player1.hp,
+      player2: duelState.players.player2.hp,
+    },
+    cards: {
+      player1: {
+        field: duelState.players.player1.field.length,
+        hand: duelState.players.player1.hand.length,
+        deck: duelState.players.player1.deck.length,
+        discard: duelState.players.player1.discardPile.length,
+      },
+      player2: {
+        field: duelState.players.player2.field.length,
+        hand: duelState.players.player2.hand.length,
+        deck: duelState.players.player2.deck.length,
+        discard: duelState.players.player2.discardPile.length,
+      },
+    },
+  };
+}
+
 /* ------------------ main render ------------------ */
 export async function renderDuelUI() {
   await ensureAllCardsLoaded();
 
-  // make sure we notice a win if HP already dropped via merges/effects
   detectWinner();
 
   try {
@@ -1110,49 +1192,25 @@ export async function renderDuelUI() {
   setTurnText();
   updateDiscardCounters();
 
-  // end-of-duel summary + redirect
   if (duelState.winner) {
+    // Hide "Start Practice Duel" button if present
+    try { document.querySelector('[data-start-practice]')?.classList?.add('hidden'); } catch {}
+
+    // Save summary (non-blocking) and show overlay instead of redirecting
     if (!duelState.summarySaved && !isSpectator) {
-      const duelId = `duel_${Date.now()}`;
-      const summary = {
-        duelId,
-        winner: duelState.winner,
-        hp: {
-          player1: duelState.players.player1.hp,
-          player2: duelState.players.player2.hp,
-        },
-        cards: {
-          player1: {
-            field: duelState.players.player1.field.length,
-            hand: duelState.players.player1.hand.length,
-            deck: duelState.players.player1.deck.length,
-            discard: duelState.players.player1.discardPile.length,
-          },
-          player2: {
-            field: duelState.players.player2.field.length,
-            hand: duelState.players.player2.hand.length,
-            deck: duelState.players.player2.deck.length,
-            discard: duelState.players.player2.discardPile.length,
-          },
-        },
-      };
-
       duelState.summarySaved = true;
-
+      const summary = buildSummary();
       fetch(`${API_BASE}/summary/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(summary),
-      })
-        .catch(err => console.error('[UI] Summary save failed:', err))
-        .finally(() => {
-          window.location.href = `${UI_BASE}/summary.html?duelId=${duelId}`;
-        });
+      }).catch(err => console.error('[UI] Summary save failed:', err));
     }
+
+    showWinnerOverlay();
     return;
   }
 
-  // Kick the bot if it's their turn
   if (duelState.currentPlayer === 'player2') {
     void maybeRunBotTurn();
   }
