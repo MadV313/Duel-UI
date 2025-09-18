@@ -371,7 +371,7 @@
         "image":"026_MP5K_Attack.png",
         "card_emoji":"\u2694\ufe0f",
         "sfx": {
-          "resolve": "USG_45100a.mp3"
+          "resolve": "Bizon100a.mp3"
         }
     },
     {
@@ -439,7 +439,10 @@
         "tags":"armor_buff, draw, block",
         "card_animation":"block.gif",
         "image":"031_TacticalVest_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"032",
@@ -450,7 +453,10 @@
         "tags":"critical_immunity, block",
         "card_animation":"block.gif",
         "image":"032_BallisticHelmet_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"033",
@@ -461,7 +467,10 @@
         "tags":"damage_reduction",
         "card_animation":"block.gif",
         "image":"033_AssaultHelmet_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"034",
@@ -472,7 +481,10 @@
         "tags":"trap_immunity",
         "card_animation":"block.gif",
         "image":"034_CombatBoots_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"035",
@@ -483,7 +495,10 @@
         "tags":"armor_buff, draw, block",
         "card_animation":"block.gif",
         "image":"035_PlateCarrier_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"036",
@@ -494,7 +509,10 @@
         "tags":"infected_immunity, gas_immunity, poison_immunity",
         "card_animation":"block.gif",
         "image":"036_NBCSuit_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"037",
@@ -505,7 +523,10 @@
         "tags":"reflect_damage, block",
         "card_animation":"block.gif",
         "image":"037_MotorbikeHelmet_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"038",
@@ -516,7 +537,10 @@
         "tags":"block",
         "card_animation":"block.gif",
         "image":"038_GorkaJacket_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"039",
@@ -527,7 +551,10 @@
         "tags":"damage_reduction",
         "card_animation":"block.gif",
         "image":"039_GorkaPants_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"040",
@@ -538,7 +565,10 @@
         "tags":"trap_immunity, melee_buff",
         "card_animation":"block.gif",
         "image":"040_CombatGloves_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"041",
@@ -549,7 +579,10 @@
         "tags":"healing",
         "card_animation":"heal.gif",
         "image":"041_HunterJacket_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"042",
@@ -560,7 +593,10 @@
         "tags":"bonus_action, block",
         "card_animation":"block.gif",
         "image":"042_TacticalShirt_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"043",
@@ -571,7 +607,10 @@
         "tags":"healing, block",
         "card_animation":"heal.gif",
         "image":"043_ParamedicJacket_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"044",
@@ -582,7 +621,10 @@
         "tags":"trap_trigger, sniper_block",
         "card_animation":"block.gif",
         "image":"044_PressVest_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"045",
@@ -593,7 +635,10 @@
         "tags":"fire_immunity",
         "card_animation":"block.gif",
         "image":"045_FirefighterPants_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"046",
@@ -604,7 +649,10 @@
         "tags":"block",
         "card_animation":"block.gif",
         "image":"046_M65Jacket_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"047",
@@ -615,7 +663,10 @@
         "tags":"armor_buff, block",
         "card_animation":"block.gif",
         "image":"047_RidersJacket_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"048",
@@ -626,7 +677,10 @@
         "tags":"trap_immunity",
         "card_animation":"block.gif",
         "image":"048_LeatherShoes_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"049",
@@ -637,7 +691,10 @@
         "tags":"draw_buff",
         "card_animation":"block.gif",
         "image":"049_TracksuitJacket_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"050",
@@ -648,7 +705,10 @@
         "tags":null,
         "card_animation":"block.gif",
         "image":"050_MilitaryBoots_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"051",
@@ -659,7 +719,10 @@
         "tags":"draw_buff, block",
         "card_animation":"block.gif",
         "image":"051_FieldVest_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"052",
@@ -670,7 +733,10 @@
         "tags":"attack_draw",
         "card_animation":"block.gif",
         "image":"052_ChestHolster_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"053",
@@ -681,7 +747,10 @@
         "tags":"armor_buff, block",
         "card_animation":"block.gif",
         "image":"053_StabproofVest_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"054",
@@ -692,7 +761,10 @@
         "tags":"draw_buff",
         "card_animation":"block.gif",
         "image":"054_AssaultBackpack_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"055",
@@ -703,7 +775,10 @@
         "tags":"water_immunity",
         "card_animation":"block.gif",
         "image":"055_DrybagBackpack_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"056",
@@ -714,7 +789,10 @@
         "tags":"loot_draw",
         "card_animation":"block.gif",
         "image":"056_TacticalBackpack_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"057",
@@ -725,7 +803,10 @@
         "tags":"critical_immunity, block",
         "card_animation":"block.gif",
         "image":"057_SkateHelmet_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"058",
@@ -736,7 +817,10 @@
         "tags":"stealth",
         "card_animation":"block.gif",
         "image":"058_BoonieHat_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"059",
@@ -747,7 +831,10 @@
         "tags":"explosive_immunity",
         "card_animation":"block.gif",
         "image":"059_WeldingMask_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"060",
@@ -758,7 +845,10 @@
         "tags":"loot_draw, block, draw",
         "card_animation":"block.gif",
         "image":"060_ImprovisedVest_Defense.png",
-        "card_emoji":"\ud83d\udee1\ufe0f"
+        "card_emoji":"\ud83d\udee1\ufe0f",
+        "sfx": {
+          "resolve": "Zipper Medium - QuickSounds.com.mp3"
+        }
     },
     {
         "card_id":"061",
@@ -923,7 +1013,10 @@
         "tags":"repair, draw",
         "card_animation":"draw.gif",
         "image":"075_WeaponCleaningKit_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "aug-clip-in.mp3"
+        }
     },
     {
         "card_id":"076",
@@ -1026,7 +1119,10 @@
         "tags":"ammo_buff, combo_range, gun_buff",
         "card_animation":null,
         "image":"083_BoxofAmmo_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "aug-clip-in.mp3"
+        }
     },
     {
         "card_id":"084",
@@ -1103,7 +1199,10 @@
         "tags":"repair, gun_recovery, ammo_repair, draw",
         "card_animation":null,
         "image":"090_GunCleaningKit_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "aug-clip-in.mp3"
+        }
     },
     {
         "card_id":"091",
@@ -1114,7 +1213,10 @@
         "tags":"infected, skip, infection_status",
         "card_animation":"poison.gif",
         "image":"091_Walker(Civilian)_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie3.mp3"
+        }
     },
     {
         "card_id":"092",
@@ -1125,7 +1227,10 @@
         "tags":"infected, discard, aggressive",
         "card_animation":null,
         "image":"092_Runner(Military)_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie4.mp3"
+        }
     },
     {
         "card_id":"093",
@@ -1136,7 +1241,10 @@
         "tags":"infected, draw_block, slow",
         "card_animation":null,
         "image":"093_Crawler_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie2.mp3"
+        }
     },
     {
         "card_id":"094",
@@ -1147,7 +1255,10 @@
         "tags":"infected, burn, dot, fire",
         "card_animation":"fire.gif",
         "image":"094_BurntInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie2.mp3"
+        }
     },
     {
         "card_id":"095",
@@ -1158,7 +1269,10 @@
         "tags":"infected, spawn, backup, random_pull",
         "card_animation":"poison.gif",
         "image":"095_PoliceInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie4.mp3"
+        }
     },
     {
         "card_id":"096",
@@ -1169,7 +1283,10 @@
         "tags":"infected, trap_immunity, gas_immunity, poison_immunity",
         "card_animation":null,
         "image":"096_HazmatInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie3.mp3"
+        }
     },
     {
         "card_id":"097",
@@ -1180,7 +1297,10 @@
         "tags":"infected, drain, heal_enemy, self_dmg",
         "card_animation":null,
         "image":"097_DoctorInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie2.mp3"
+        }
     },
     {
         "card_id":"098",
@@ -1191,7 +1311,10 @@
         "tags":"infected, steal, defense_target, conditional, return_after_duel",
         "card_animation":null,
         "image":"098_HunterInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie4.mp3"
+        }
     },
     {
         "card_id":"099",
@@ -1202,7 +1325,10 @@
         "tags":"infected, damage, block_heal",
         "card_animation":null,
         "image":"099_SurvivorInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie2.mp3"
+        }
     },
     {
         "card_id":"100",
@@ -1213,7 +1339,10 @@
         "tags":"infected, disable_hand, stun, skip",
         "card_animation":null,
         "image":"100_PrisonerInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie4.mp3"
+        }
     },
     {
         "card_id":"101",
@@ -1224,7 +1353,10 @@
         "tags":"infected, gear_destroy, random_target",
         "card_animation":null,
         "image":"101_Spitter(Mutated)_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie3.mp3"
+        }
     },
     {
         "card_id":"102",
@@ -1235,7 +1367,10 @@
         "tags":"infected, aoe, explosive",
         "card_animation":"explosion.gif",
         "image":"102_Bloater_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie4.mp3"
+        }
     },
     {
         "card_id":"103",
@@ -1246,7 +1381,10 @@
         "tags":"infected, trap_immunity, damage",
         "card_animation":null,
         "image":"103_FastInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie2.mp3"
+        }
     },
     {
         "card_id":"104",
@@ -1257,7 +1395,10 @@
         "tags":"infected, damage, blockable",
         "card_animation":null,
         "image":"104_ButcherInfected_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie2.mp3"
+        }
     },
     {
         "card_id":"105",
@@ -1268,7 +1409,10 @@
         "tags":"infected, boss, unstoppable, unblockable",
         "card_animation":null,
         "image":"105_Behemoth_Infected.png",
-        "card_emoji":"\u2623\ufe0f"
+        "card_emoji":"\u2623\ufe0f",
+        "sfx": {
+          "resolve": "Zombie4.mp3"
+        }
     },
     {
         "card_id":"106",
