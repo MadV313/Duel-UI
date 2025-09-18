@@ -1273,10 +1273,6 @@ export async function renderDuelUI() {
   startTurnDrawIfNeeded();
   reapplyFiredTrapFaceState();
   resolveBotNonTrapCardsOnce();
-
-  // 🔊 detect newly placed player1 field cards and play 'place' before resolving effects
-  playPlaceSfxForNewFieldCards('player1');
-
   await resolveHumanNonTrapCardsOnce();
   enforceFacedownUnfiredTraps('player1');
   enforceFacedownUnfiredTraps('player2');
