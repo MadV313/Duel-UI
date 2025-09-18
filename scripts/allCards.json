@@ -1423,7 +1423,10 @@
         "tags":"trap, immobilize, melee_block, triggered, counterable, trap_ready, face_down, flip_reveal",
         "card_animation":"trap.gif",
         "image":"106_BearTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"107",
@@ -1434,7 +1437,10 @@
         "tags":"trap, explosive, stun, discard, combo_trap, counterable, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"107_TripwireTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"108",
@@ -1447,7 +1453,8 @@
         "image":"108_Landmine_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "resolve": "explosion.mp3"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "fire": "explosion.mp3"
         }
     },
     {
@@ -1461,7 +1468,8 @@
         "image":"109_MakeshiftCharge_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "resolve": "explosion.mp3"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "fire": "explosion.mp3"
         }
     },
     {
@@ -1475,7 +1483,8 @@
         "image":"110_PerimeterTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "resolve": "explosion.mp3"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+          "fire": "explosion.mp3"
         }
     },
     {
@@ -1487,7 +1496,10 @@
         "tags":"trap, fire, dot, burn, duration, trap_ready, face_down, flip_reveal",
         "card_animation":"fire.gif",
         "image":"111_FireBarrelTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"112",
@@ -1498,7 +1510,10 @@
         "tags":"trap, snare, draw_block, triggered, trap_ready, face_down, flip_reveal",
         "card_animation":"trap.gif",
         "image":"112_WireSnare_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"113",
@@ -1509,7 +1524,10 @@
         "tags":"trap, explosive, aoe, shared_dmg, trap_ready, face_down, flip_reveal",
         "card_animation":"trap.gif",
         "image":"113_SpikedLogTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"114",
@@ -1522,7 +1540,8 @@
         "image":"114_ExplosiveGrenadeTrap_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "resolve": "explosion.mp3"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "fire": "explosion.mp3"
         }
     },
     {
@@ -1534,7 +1553,10 @@
         "tags":"trap, gas, block_heal, duration, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"115_GasCanisterTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"116",
@@ -1545,7 +1567,10 @@
         "tags":"trap, fire, discard, disrupt, attack_target, trap_ready, face_down, flip_reveal",
         "card_animation":"fire.gif",
         "image":"116_FlareDistraction_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"117",
@@ -1556,7 +1581,10 @@
         "tags":"trap, reveal_hand, intel, combo_trap, trap_ready, face_down, flip_reveal",
         "card_animation":"trap.gif",
         "image":"117_AlarmTripwire_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"118",
@@ -1567,7 +1595,10 @@
         "tags":"trap, hidden, explosive, blockable, combo_range, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"118_SpringloadedBreachTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"119",
@@ -1580,7 +1611,8 @@
         "image":"119_IEDPressurePlate_Trap.png",
         "card_emoji":"\ud83e\udde8",
         "sfx": {
-          "resolve": "explosion.mp3"
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"  
+          "fire": "explosion.mp3"
         }
     },
     {
@@ -1592,7 +1624,10 @@
         "tags":"trap, armor_disable, melee, disrupt, combo_melee, trap_ready, face_down, flip_reveal",
         "card_animation":"trap.gif",
         "image":"120_SwingingSpikedBat_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "place": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"121",
@@ -1603,7 +1638,10 @@
         "tags":"specialty, copy, discard_both, deck_search, combo_specialty",
         "card_animation":null,
         "image":"121_TheAgency_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-mechanical-crate-pick-up-3154.wav"
+        } 
     },
     {
         "card_id":"122",
@@ -1614,7 +1652,10 @@
         "tags":null,
         "card_animation":null,
         "image":"122_TheTrader_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-unlock-new-item-game-notification-254.wav"
+        } 
     },
     {
         "card_id":"123",
@@ -1625,7 +1666,10 @@
         "tags":null,
         "card_animation":null,
         "image":"123_JakubNowak_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-unlock-new-item-game-notification-254.wav"
+        } 
     },
     {
         "card_id":"124",
@@ -1636,7 +1680,10 @@
         "tags":null,
         "card_animation":"poison.gif",
         "image":"124_Dr.Wesker_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-unlock-new-item-game-notification-254.wav"
+        } 
     },
     {
         "card_id":"125",
@@ -1647,7 +1694,10 @@
         "tags":"specialty, steal, hand_target, aggressive, return_after_duel",
         "card_animation":null,
         "image":"125_ElenaKovak_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-unlock-new-item-game-notification-254.wav"
+        } 
     },
     {
         "card_id":"126",
@@ -1658,7 +1708,10 @@
         "tags":null,
         "card_animation":null,
         "image":"126_Lt.Col.EmilBor\u00e9n_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-unlock-new-item-game-notification-254.wav"
+        } 
     },
     {
         "card_id":"127",
@@ -1669,6 +1722,9 @@
         "tags":null,
         "card_animation":null,
         "image":"127_IsabelleLaurent_Specialty.png",
-        "card_emoji":"\u2728"
+        "card_emoji":"\u2728",
+        "sfx": {
+          "resolve": "mixkit-unlock-new-item-game-notification-254.wav"
+        } 
     }
 ]
