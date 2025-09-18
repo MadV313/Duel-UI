@@ -19,7 +19,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"001_M4A1_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "M4A10.mp3"
+        }        
     },
     {
         "card_id":"002",
@@ -30,7 +33,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"002_AKM_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "KAM0.mp3"
+        }
     },
     {
         "card_id":"003",
@@ -41,7 +47,10 @@
         "tags":"gun, sniper, draw_block, combo_sniper, skip",
         "card_animation":"attack.gif",
         "image":"003_MosinNagant_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "Mosin_91300.mp3"
+        }
     },
     {
         "card_id":"004",
@@ -52,7 +61,10 @@
         "tags":"gun, draw",
         "card_animation":"attack.gif",
         "image":"004_SKS_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "SK_59660-new.mp3"
+        }
     },
     {
         "card_id":"005",
@@ -63,7 +75,10 @@
         "tags":"gun, hunting_rifle, infected",
         "card_animation":"attack.gif",
         "image":"005_CR527_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "CR_5270.mp3"
+        }
     },
     {
         "card_id":"006",
@@ -74,7 +89,10 @@
         "tags":"gun, sniper, reveal_hand, flip_reveal, trap_ready",
         "card_animation":"attack.gif",
         "image":"006_CR550Savanna_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "CR_550_Savanna0.mp3"
+        }
     },
     {
         "card_id":"007",
@@ -85,7 +103,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"007_BK133_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "BK_133_Slugs0.mp3"
+        }
     },
     {
         "card_id":"008",
@@ -96,7 +117,10 @@
         "tags":"gun, loot_draw",
         "card_animation":"attack.gif",
         "image":"008_BK18_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "BK_180.mp3"
+        }
     },
     {
         "card_id":"009",
@@ -107,7 +131,10 @@
         "tags":"gun, silenced",
         "card_animation":"attack.gif",
         "image":"009_MKII_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "MK_II0.mp3"
+        }
     },
     {
         "card_id":"010",
@@ -118,7 +145,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"010_FX45_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "FX_450.mp3"
+        }
     },
     {
         "card_id":"011",
@@ -129,7 +159,10 @@
         "tags":"gun, crit",
         "card_animation":"attack.gif",
         "image":"011_Deagle_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "Deagle0.mp3"
+        }
     },
     {
         "card_id":"012",
@@ -140,7 +173,10 @@
         "tags":"gun, silenced_rifle, flip_reveal, trap_ready",
         "card_animation":"attack.gif",
         "image":"012_VSSVintorez_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "VSS0.mp3"
+        }
     },
     {
         "card_id":"013",
@@ -151,7 +187,10 @@
         "tags":"gun, sniper",
         "card_animation":"attack.gif",
         "image":"013_SVD_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "VSD0.mp3"
+        }
     },
     {
         "card_id":"014",
@@ -162,7 +201,10 @@
         "tags":"gun, sniper, skip",
         "card_animation":"attack.gif",
         "image":"014_M70Tundra_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "M_700.mp3"
+        }
     },
     {
         "card_id":"015",
@@ -173,7 +215,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"015_IZH18_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "BK_180.mp3"
+        }
     },
     {
         "card_id":"016",
@@ -184,7 +229,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"016_SawedoffShotgun_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "BK-12_Buck0.mp3"
+        }
     },
     {
         "card_id":"017",
@@ -195,7 +243,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"017_USG45_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "USG_450.mp3"
+        }
     },
     {
         "card_id":"018",
@@ -206,7 +257,10 @@
         "tags":"gun, draw, infected",
         "card_animation":"attack.gif",
         "image":"018_UMP45_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "USG45sil.mp3"
+        }
     },
     {
         "card_id":"019",
@@ -217,7 +271,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"019_KA74_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "KA_740.mp3"
+        }
     },
     {
         "card_id":"020",
@@ -228,7 +285,10 @@
         "tags":"gun, draw, defense_draw",
         "card_animation":"attack.gif",
         "image":"020_KAM_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "KAM0.mp3"
+        }
     },
     {
         "card_id":"021",
@@ -239,7 +299,10 @@
         "tags":"gun, skip",
         "card_animation":"attack.gif",
         "image":"021_FAL_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "Vikhr100.mp3"
+        }
     },
     {
         "card_id":"022",
@@ -250,7 +313,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"022_AK101_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "KA_1010.mp3"
+        }
     },
     {
         "card_id":"023",
@@ -261,7 +327,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"023_AK74_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "KA_740.mp3"
+        }
     },
     {
         "card_id":"024",
@@ -272,7 +341,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"024_M16A2_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "M16100a.mp3"
+        }
     },
     {
         "card_id":"025",
@@ -283,7 +355,10 @@
         "tags":"gun, draw",
         "card_animation":"attack.gif",
         "image":"025_SG5K_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "SG5_K100a.mp3"
+        }
     },
     {
         "card_id":"026",
@@ -294,7 +369,10 @@
         "tags":"gun, infected",
         "card_animation":"attack.gif",
         "image":"026_MP5K_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "USG_45100a.mp3"
+        }
     },
     {
         "card_id":"027",
@@ -305,7 +383,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"027_Repeater_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "Repeater0.mp3"
+        }
     },
     {
         "card_id":"028",
@@ -316,7 +397,10 @@
         "tags":"gun",
         "card_animation":"attack.gif",
         "image":"028_Derringer_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "Derringer0.mp3"
+        }
     },
     {
         "card_id":"029",
@@ -327,7 +411,10 @@
         "tags":"gun, scoped_pistol",
         "card_animation":"attack.gif",
         "image":"029_Longhorn_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "Longhorn0.mp3"
+        }
     },
     {
         "card_id":"030",
@@ -338,7 +425,10 @@
         "tags":"crossbow, draw, trap",
         "card_animation":"attack.gif",
         "image":"030_Crossbow_Attack.png",
-        "card_emoji":"\u2694\ufe0f"
+        "card_emoji":"\u2694\ufe0f",
+        "sfx": {
+          "resolve": "crossbow0.mp3"
+        }
     },
     {
         "card_id":"031",
@@ -844,7 +934,10 @@
         "tags":"heal",
         "card_animation":"heal.gif",
         "image":"076_CanofTacticalBacon_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "foodcrunch.mp3"
+        }
     },
     {
         "card_id":"077",
@@ -855,7 +948,10 @@
         "tags":"heal",
         "card_animation":"heal.gif",
         "image":"077_MRE_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "foodcrunch.mp3"
+        }
     },
     {
         "card_id":"078",
@@ -866,7 +962,10 @@
         "tags":"heal, hydration, aesthetic",
         "card_animation":"heal.gif",
         "image":"078_Canteen_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "drinks.mp3"
+        }
     },
     {
         "card_id":"079",
@@ -900,6 +999,9 @@
         "card_animation":null,
         "image":"081_Dynamite_Loot.png",
         "card_emoji":"\ud83c\udf92"
+        "sfx": {
+          "resolve": "explosion.mp3"
+        }
     },
     {
         "card_id":"082",
@@ -911,6 +1013,9 @@
         "card_animation":null,
         "image":"082_FirstAidKit_Loot.png",
         "card_emoji":"\ud83c\udf92"
+        "sfx": {
+          "resolve": "rags.mp3"
+        }
     },
     {
         "card_id":"083",
@@ -1196,7 +1301,10 @@
         "tags":"trap, explosive, direct_dmg, triggered, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"108_Landmine_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "resolve": "explosion.mp3"
+        }
     },
     {
         "card_id":"109",
@@ -1207,7 +1315,10 @@
         "tags":"trap, explosive, stun, skip, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"109_MakeshiftCharge_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "resolve": "explosion.mp3"
+        }
     },
     {
         "card_id":"110",
@@ -1218,7 +1329,10 @@
         "tags":"trap, explosive, pierce, defense_bypass, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"110_PerimeterTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "resolve": "explosion.mp3"
+        }
     },
     {
         "card_id":"111",
@@ -1262,7 +1376,10 @@
         "tags":"trap, explosive, destroy_card, triggered, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"114_ExplosiveGrenadeTrap_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "resolve": "explosion.mp3"
+        }
     },
     {
         "card_id":"115",
@@ -1317,7 +1434,10 @@
         "tags":"trap, explosive, stun, pierce, combo_trap, skip, trap_ready, face_down, flip_reveal",
         "card_animation":"explosion.gif",
         "image":"119_IEDPressurePlate_Trap.png",
-        "card_emoji":"\ud83e\udde8"
+        "card_emoji":"\ud83e\udde8",
+        "sfx": {
+          "resolve": "explosion.mp3"
+        }
     },
     {
         "card_id":"120",
