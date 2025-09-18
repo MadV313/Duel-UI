@@ -859,7 +859,10 @@
         "tags":"recon, face_down, trap_ready, flip_reveal",
         "card_animation":null,
         "image":"061_Binoculars_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"062",
@@ -870,7 +873,10 @@
         "tags":"targeting_buff, combo_range, draw",
         "card_animation":"attack.gif",
         "image":"062_Rangefinder_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"063",
@@ -881,7 +887,10 @@
         "tags":"tactical_buff",
         "card_animation":null,
         "image":"063_HandheldTransceiver_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"064",
@@ -892,7 +901,10 @@
         "tags":"evasion, combo_trap",
         "card_animation":"shield.gif",
         "image":"064_Compass_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"065",
@@ -903,7 +915,10 @@
         "tags":"map, draw",
         "card_animation":"draw.gif",
         "image":"065_Map_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"066",
@@ -914,7 +929,10 @@
         "tags":"intel, combo_trap, face_down, trap_ready, flip_reveal, hidden",
         "card_animation":null,
         "image":"066_Headtorch_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"067",
@@ -925,7 +943,10 @@
         "tags":"intel, protection, combo_infected, steal, infected",
         "card_animation":"shield.gif",
         "image":"067_NightVisionGoggles_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"068",
@@ -936,7 +957,10 @@
         "tags":"trap, stun, skip, face_down, trap_ready, flip_reveal, hidden",
         "card_animation":null,
         "image":"068_Tripwire_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"069",
@@ -947,7 +971,10 @@
         "tags":"repair",
         "card_animation":null,
         "image":"069_DuctTape_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"070",
@@ -958,7 +985,10 @@
         "tags":"disruption",
         "card_animation":null,
         "image":"070_Megaphone_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"071",
@@ -969,7 +999,10 @@
         "tags":"comms",
         "card_animation":"draw.gif",
         "image":"071_WalkieTalkie_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"072",
@@ -980,7 +1013,10 @@
         "tags":"protection, combo_infected",
         "card_animation":"shield.gif",
         "image":"072_Flashlight_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"073",
@@ -991,7 +1027,10 @@
         "tags":"tracking, combo_marked",
         "card_animation":null,
         "image":"073_GlowStick_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"074",
@@ -1002,7 +1041,10 @@
         "tags":"scope, crit, combo_crit",
         "card_animation":null,
         "image":"074_HuntingScope_Tactical.png",
-        "card_emoji":"\ud83e\udded"
+        "card_emoji":"\ud83e\udded",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"075",
@@ -1069,7 +1111,10 @@
         "tags":"trap_material, armor_buff, draw_trap, choice",
         "card_animation":null,
         "image":"079_BoxofNails_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"080",
@@ -1080,7 +1125,10 @@
         "tags":"fire, burn, dot",
         "card_animation":"fire.gif",
         "image":"080_JerryCan_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"081",
@@ -1133,7 +1181,10 @@
         "tags":"draw_loot, recovery",
         "card_animation":null,
         "image":"084_FishingRod_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"085",
@@ -1144,7 +1195,10 @@
         "tags":"steal, loot_target, chance_fail, return_after_duel",
         "card_animation":null,
         "image":"085_Lockpick_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"086",
@@ -1155,7 +1209,10 @@
         "tags":"recharge, tactical_recovery, draw",
         "card_animation":"draw.gif",
         "image":"086_Battery_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"087",
@@ -1166,7 +1223,10 @@
         "tags":"trap, stun, disable, skip",
         "card_animation":null,
         "image":"087_Rope_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"088",
@@ -1177,7 +1237,10 @@
         "tags":"heal, sacrifice, loot_cost, conversion",
         "card_animation":null,
         "image":"088_CookingPot_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"089",
@@ -1188,7 +1251,10 @@
         "tags":"repair, durability_restore",
         "card_animation":null,
         "image":"089_SewingKit_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
+        "sfx": {
+          "resolve": "mixkit-quick-positive-video-game-notification-interface-265.wav"
+        }
     },
     {
         "card_id":"090",
