@@ -1153,7 +1153,7 @@
         "tags":"repair, heal_defense",
         "card_animation":null,
         "image":"082_FirstAidKit_Loot.png",
-        "card_emoji":"\ud83c\udf92"
+        "card_emoji":"\ud83c\udf92",
         "sfx": {
           "resolve": "rags.mp3"
         }
