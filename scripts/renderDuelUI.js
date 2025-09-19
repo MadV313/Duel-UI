@@ -772,8 +772,6 @@ function setHpText() {
 }
 
 /* --------- discard counter helpers --------- */
-function counterId(player) { return `${player}-discard-counter}`; } // NOTE: original used `${player}-discard-counter`; keep typo-free
-// Correct the above (retain original behavior):
 function counterId(player) { return `${player}-discard-counter`; }
 
 function ensureCounterNode(afterNode, playerLabel = '') {
