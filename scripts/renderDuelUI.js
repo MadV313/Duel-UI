@@ -517,7 +517,7 @@ function cleanupEndOfTurnLocal(playerKey) {
 }
 
 /* ---------- Trap activation (UI side) ---------- */
-function triggerOneTrap(defenderKey) {
+async function triggerOneTrap(defenderKey) {
   const D = duelState.players[defenderKey];
   if (!D) return false;
   ensureArrays(D);
@@ -531,15 +531,19 @@ function triggerOneTrap(defenderKey) {
   firedTrapMarks().push({ owner: defenderKey, cardId: trap.cardId });
 
   const meta = getMeta(trap.cardId);
-  resolveImmediateEffect(meta, defenderKey);
-  audio.playForCard(getMeta(trap.cardId), 'fire');   // trap_fire or card-specific
+
+  // 🔊 Play the trap reveal/fire SFX BEFORE its effect resolves
+  await audio.playForCard(getMeta(trap.cardId), 'fire');   // trap_fire or card-specific
+
+  // Now resolve the trap's effect as owned by the defender
+  await resolveImmediateEffect(meta, defenderKey);
 
   try { console.log('[trap] fired', { owner: defenderKey, id: trap.cardId }); } catch {}
   return true;
 }
 
 /* -------------- Effect resolver -------------- */
-function resolveImmediateEffect(meta, ownerKey) {
+async function resolveImmediateEffect(meta, ownerKey) {
   const you = ownerKey;
   const foe = ownerKey === 'player1' ? 'player2' : 'player1';
 
@@ -552,7 +556,7 @@ function resolveImmediateEffect(meta, ownerKey) {
     tags.has('infected') ||
     /\binfected\b/.test(name);
 
-  if (isAtkOrInf) triggerOneTrap(foe);
+  if (isAtkOrInf) await triggerOneTrap(foe);
   if (!meta) return;
 
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
@@ -561,14 +565,14 @@ function resolveImmediateEffect(meta, ownerKey) {
   const dmg = damageFromText(text);
   if (dmg > 0) {
     changeHP(foe, -dmg);
-    audio.play('attack_hit.mp3');
+    await audio.play('attack_hit.mp3');
   }
 
   // heal
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) {
     changeHP(you, +Number(mHeal[1]));
-    audio.play('heal.mp3');
+    await audio.play('heal.mp3');
   }
 
   // draws
@@ -576,7 +580,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
-    audio.play('draw.mp3');
+    await audio.play('draw.mp3');
   }
 
   // category draws
@@ -612,20 +616,20 @@ function resolveImmediateEffect(meta, ownerKey) {
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
   // 🔊 per-card resolve SFX (if defined) or sensible fallback
-  audio.playForCard(meta, 'resolve');
+  await audio.playForCard(meta, 'resolve');
 
   detectWinner();
 }
 
 /** Scan bot field for newly-placed non-traps and resolve them once (no auto-discard here). */
-function resolveBotNonTrapCardsOnce() {
+async function resolveBotNonTrapCardsOnce() {
   const bot = duelState?.players?.player2;
   if (!bot || !Array.isArray(bot.field)) return;
   for (const card of bot.field.slice()) {
     if (duelState.winner) break;
     if (card && !card.isFaceDown && !isTrap(card.cardId) && !card._resolvedByUI) {
       const meta = getMeta(card.cardId);
-      resolveImmediateEffect(meta, 'player2');
+      await resolveImmediateEffect(meta, 'player2');
       card._resolvedByUI = true;
     }
   }
@@ -651,7 +655,7 @@ async function resolveHumanNonTrapCardsOnce() {
         card._resolvedByUI = true;
         continue;
       }
-      resolveImmediateEffect(meta, 'player1');
+      await resolveImmediateEffect(meta, 'player1');
       card._resolvedByUI = true;
 
       if (shouldAutoDiscard(meta)) moveFieldCardToDiscard('player1', card);
@@ -692,7 +696,7 @@ async function botAutoPlayAssist() {
     const meta = getMeta(final.cardId);
 
     if (!final.isFaceDown) {
-      resolveImmediateEffect(meta, 'player2');
+      await resolveImmediateEffect(meta, 'player2');
       final._resolvedByUI = true;
       setHpText();
       await wait();
@@ -768,6 +772,8 @@ function setHpText() {
 }
 
 /* --------- discard counter helpers --------- */
+function counterId(player) { return `${player}-discard-counter}`; } // NOTE: original used `${player}-discard-counter`; keep typo-free
+// Correct the above (retain original behavior):
 function counterId(player) { return `${player}-discard-counter`; }
 
 function ensureCounterNode(afterNode, playerLabel = '') {
@@ -990,7 +996,7 @@ async function maybeRunBotTurn() {
     try {
       playedPre = await botAutoPlayAssist();
       if (playedPre) {
-        resolveBotNonTrapCardsOnce();
+        await resolveBotNonTrapCardsOnce();
         enforceFacedownUnfiredTraps('player2');
       }
     } catch (e) { console.warn('[UI] pre-play assist error', e); }
@@ -1015,7 +1021,7 @@ async function maybeRunBotTurn() {
     if (!duelState.winner && duelState.currentPlayer === 'player2' && !playedPre) {
       playedPost = await botAutoPlayAssist();
       if (playedPost) {
-        resolveBotNonTrapCardsOnce();
+        await resolveBotNonTrapCardsOnce();
         enforceFacedownUnfiredTraps('player2');
       }
     }
@@ -1038,8 +1044,12 @@ async function maybeRunBotTurn() {
           renderZones();
           await wait();
           const meta = getMeta(final.cardId);
+
+          // 🔊 place SFX for fallback bot play
+          audio.playForCard(meta, 'place');
+
           if (!final.isFaceDown) {
-            resolveImmediateEffect(meta, 'player2');
+            await resolveImmediateEffect(meta, 'player2');
             final._resolvedByUI = true;
             setHpText();
             await wait();
@@ -1058,7 +1068,7 @@ async function maybeRunBotTurn() {
     console.error('[UI] Bot move error:', err);
     if (!duelState.winner && duelState.currentPlayer === 'player2') {
       await botAutoPlayAssist();
-      resolveBotNonTrapCardsOnce();
+      await resolveBotNonTrapCardsOnce();
       enforceFacedownUnfiredTraps('player2');
       await wait();
     }
@@ -1077,7 +1087,7 @@ async function maybeRunBotTurn() {
 
     startTurnDrawIfNeeded();
 
-    resolveBotNonTrapCardsOnce();
+    await resolveBotNonTrapCardsOnce();
     enforceFacedownUnfiredTraps('player2');
     enforceFacedownUnfiredTraps('player1');
 
@@ -1272,7 +1282,7 @@ export async function renderDuelUI() {
   clampFields(duelState);
   startTurnDrawIfNeeded();
   reapplyFiredTrapFaceState();
-  resolveBotNonTrapCardsOnce();
+  await resolveBotNonTrapCardsOnce();
 
   // 🔊 detect newly placed player1 field cards and play 'place' before resolving effects
   playPlaceSfxForNewFieldCards('player1');
