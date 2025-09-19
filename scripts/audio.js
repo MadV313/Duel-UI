@@ -4,6 +4,8 @@ const DEFAULTS = {
   sfxBase: '/audio/sfx/',
   volume: 0.65,     // sfx volume
   bgVolume: 0.35,   // bg volume
+  gapMs: 180,       // spacing between queued SFX
+  sfxTimeoutMs: 4000, // fallback if 'ended' never fires
 };
 
 const store = {
@@ -19,6 +21,8 @@ const cache = new Map(); // url -> HTMLAudioElement (primed)
 let bgAudio = null;
 
 /* ---------------- internals ---------------- */
+const sleep = (ms = 0) => new Promise(r => setTimeout(r, ms));
+
 function makeAudio(src, vol) {
   const a = new Audio(src);
   a.preload = 'auto';
@@ -176,6 +180,72 @@ function sfxByType(meta, event = 'resolve') {
   return url;
 }
 
+/* ---------------- simple SFX queue ---------------- */
+const sfxQueue = [];
+let processingQueue = false;
+
+function _enqueueUrl(url, { gapMs } = {}) {
+  const item = {
+    url,
+    gapMs: Number.isFinite(gapMs) ? gapMs : DEFAULTS.gapMs,
+  };
+  return new Promise(resolve => {
+    item._resolve = resolve;
+    sfxQueue.push(item);
+    if (!processingQueue) _processQueue();
+  });
+}
+
+async function _processQueue() {
+  processingQueue = true;
+  try {
+    while (sfxQueue.length) {
+      const { url, gapMs, _resolve } = sfxQueue.shift();
+
+      if (!url || store.muted) {
+        // nothing to play or muted: resolve immediately but keep cadence
+        try { _resolve?.(); } catch {}
+        if (gapMs > 0) await sleep(gapMs);
+        continue;
+      }
+
+      const a = getPrimed(url);
+
+      const playPromise = new Promise(res => {
+        let done = false;
+        const cleanup = () => {
+          if (done) return;
+          done = true;
+          a.removeEventListener('ended', onEnd);
+          a.removeEventListener('error', onEnd);
+          res();
+        };
+        const onEnd = () => cleanup();
+        a.addEventListener('ended', onEnd, { once: true });
+        a.addEventListener('error', onEnd, { once: true });
+
+        // Fallback: if metadata knows duration, use it; otherwise default timeout
+        const durMs = Number.isFinite(a.duration) && a.duration > 0
+          ? Math.ceil(a.duration * 1000) + 50
+          : DEFAULTS.sfxTimeoutMs;
+        setTimeout(cleanup, durMs);
+      });
+
+      try {
+        safePlay(a);
+      } catch {
+        // ignore playback errors, still advance queue
+      }
+
+      await playPromise;
+      try { _resolve?.(); } catch {}
+      if (gapMs > 0) await sleep(gapMs);
+    }
+  } finally {
+    processingQueue = false;
+  }
+}
+
 /* ---------------- public API ---------------- */
 export const audio = {
   configure(opts = {}) {
@@ -193,25 +263,41 @@ export const audio = {
   stopBg() { try { bgAudio?.pause(); } catch {} },
   isBgPlaying() { return !!(bgAudio && !bgAudio.paused); },
 
-  // SFX
-  play(nameOrUrl) {
-    // allow array input here too
+  // SFX (queued)
+  play(nameOrUrl, opts = {}) {
+    // allow array input here too (pick one randomly)
     if (Array.isArray(nameOrUrl)) {
       const pick = chooseOneSfx(nameOrUrl);
-      if (!pick) return;
-      const a = getPrimed(pick);
-      safePlay(a);
-      return;
+      if (!pick) return Promise.resolve();
+      return _enqueueUrl(pick, opts);
     }
-
     const url = pathify(nameOrUrl);
-    if (!url) return;
-    const a = getPrimed(url);
-    safePlay(a);
+    if (!url) return Promise.resolve();
+    return _enqueueUrl(url, opts);
   },
-  playForCard(meta, event = 'resolve') {
+
+  playForCard(meta, event = 'resolve', opts = {}) {
     const url = sfxByType(meta, event);
-    if (url) this.play(url);
+    if (!url) return Promise.resolve();
+    return _enqueueUrl(url, opts);
+  },
+
+  // Convenience: queue multiple steps in order
+  async sequence(steps = [], { gapMs } = {}) {
+    for (const step of steps) {
+      if (!step) continue;
+      if (typeof step === 'string' || Array.isArray(step)) {
+        await this.play(step, { gapMs });
+      } else if (step.meta) {
+        await this.playForCard(step.meta, step.event || 'resolve', { gapMs });
+      } else if (step.url) {
+        await this.play(step.url, { gapMs });
+      }
+    }
+  },
+
+  clearQueue() {
+    sfxQueue.length = 0;
   },
 
   // Volume / mute
