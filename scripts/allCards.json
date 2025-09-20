@@ -1281,7 +1281,7 @@
         "image":"091_Walker(Civilian)_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie3.mp3"
+          "place": "zombie3.mp3"
         }
     },
     {
@@ -1295,7 +1295,7 @@
         "image":"092_Runner(Military)_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie4.mp3"
+          "place": "zombie4.mp3"
         }
     },
     {
@@ -1309,7 +1309,7 @@
         "image":"093_Crawler_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie2.mp3"
+          "place": "zombie2.mp3"
         }
     },
     {
@@ -1323,7 +1323,7 @@
         "image":"094_BurntInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie2.mp3"
+          "place": "zombie2.mp3"
         }
     },
     {
@@ -1337,7 +1337,7 @@
         "image":"095_PoliceInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie4.mp3"
+          "place": "zombie4.mp3"
         }
     },
     {
@@ -1351,7 +1351,7 @@
         "image":"096_HazmatInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie3.mp3"
+          "place": "zombie3.mp3"
         }
     },
     {
@@ -1365,7 +1365,7 @@
         "image":"097_DoctorInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie2.mp3"
+          "place": "zombie2.mp3"
         }
     },
     {
@@ -1379,7 +1379,7 @@
         "image":"098_HunterInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie4.mp3"
+          "place": "zombie4.mp3"
         }
     },
     {
@@ -1393,7 +1393,7 @@
         "image":"099_SurvivorInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie2.mp3"
+          "place": "zombie2.mp3"
         }
     },
     {
@@ -1407,7 +1407,7 @@
         "image":"100_PrisonerInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie4.mp3"
+          "place": "zombie4.mp3"
         }
     },
     {
@@ -1421,7 +1421,7 @@
         "image":"101_Spitter(Mutated)_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie3.mp3"
+          "place": "zombie3.mp3"
         }
     },
     {
@@ -1435,7 +1435,7 @@
         "image":"102_Bloater_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie4.mp3"
+          "place": "zombie4.mp3"
         }
     },
     {
@@ -1449,7 +1449,7 @@
         "image":"103_FastInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie2.mp3"
+          "place": "zombie2.mp3"
         }
     },
     {
@@ -1463,7 +1463,7 @@
         "image":"104_ButcherInfected_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie2.mp3"
+          "place": "zombie2.mp3"
         }
     },
     {
@@ -1477,7 +1477,7 @@
         "image":"105_Behemoth_Infected.png",
         "card_emoji":"\u2623\ufe0f",
         "sfx": {
-          "place": "Zombie4.mp3"
+          "place": "zombie4.mp3"
         }
     },
     {
