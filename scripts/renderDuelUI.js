@@ -429,6 +429,18 @@ function isPersistentOnField(meta) {
   return tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor');
 }
 
+/* ---------- tiny serial SFX queue (prevents overlaps choking) ---------- */
+let _sfxChain = Promise.resolve();
+/** Queue a sound-producing callback and wait a short gap to serialize SFX. */
+function _queueSfxPlay(cb, gap = 240) {
+  _sfxChain = _sfxChain
+    .then(async () => { try { cb(); } catch {} await wait(gap); })
+    .catch(() => {}); // keep the chain alive on errors
+  return _sfxChain;
+}
+const qPlayForCard = (meta, event, gap) => _queueSfxPlay(() => audio.playForCard(meta, event), gap);
+const qPlay        = (nameOrUrl, gap)    => _queueSfxPlay(() => audio.play(nameOrUrl), gap);
+
 /** Remove only fired traps for a given owner (move to discard). */
 function purgeFiredTraps(ownerKey) {
   const P = duelState.players?.[ownerKey];
@@ -532,10 +544,10 @@ async function triggerOneTrap(defenderKey) {
 
   const meta = getMeta(trap.cardId);
 
-  // 🔊 Play the trap reveal/fire SFX BEFORE its effect resolves
-  await audio.playForCard(getMeta(trap.cardId), 'fire');   // trap_fire or card-specific
+  // 🔊 Queue the trap reveal/fire SFX BEFORE its effect resolves (serialized)
+  await qPlayForCard(meta, 'fire');   // trap_fire or card-specific
 
-  // Now resolve the trap's effect as owned by the defender
+  // Now resolve the trap's effect as owned by the defender (its own resolve SFX will also be queued)
   await resolveImmediateEffect(meta, defenderKey);
 
   try { console.log('[trap] fired', { owner: defenderKey, id: trap.cardId }); } catch {}
@@ -556,6 +568,7 @@ async function resolveImmediateEffect(meta, ownerKey) {
     tags.has('infected') ||
     /\binfected\b/.test(name);
 
+  // If this effect is an attack/infected, first trigger a foe trap (its SFX will be queued)
   if (isAtkOrInf) await triggerOneTrap(foe);
   if (!meta) return;
 
@@ -565,14 +578,14 @@ async function resolveImmediateEffect(meta, ownerKey) {
   const dmg = damageFromText(text);
   if (dmg > 0) {
     changeHP(foe, -dmg);
-    await audio.play('attack_hit.mp3');
+    await qPlay('attack_hit.mp3');
   }
 
   // heal
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) {
     changeHP(you, +Number(mHeal[1]));
-    await audio.play('heal.mp3');
+    await qPlay('heal.mp3');
   }
 
   // draws
@@ -580,7 +593,7 @@ async function resolveImmediateEffect(meta, ownerKey) {
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
     for (let i = 0; i < n; i++) drawFor(you);
-    await audio.play('draw.mp3');
+    await qPlay('draw.mp3');
   }
 
   // category draws
@@ -615,8 +628,8 @@ async function resolveImmediateEffect(meta, ownerKey) {
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
-  // 🔊 per-card resolve SFX (if defined) or sensible fallback
-  await audio.playForCard(meta, 'resolve');
+  // 🔊 per-card resolve SFX (queued so it comes after trap fire/other SFX)
+  await qPlayForCard(meta, 'resolve');
 
   detectWinner();
 }
@@ -645,8 +658,8 @@ async function resolveHumanNonTrapCardsOnce() {
     if (card && !card.isFaceDown && !isTrap(card.cardId) && !card._resolvedByUI) {
       const meta = getMeta(card.cardId);
 
-      // 🔊 ensure a placement sound for human visible cards (non-traps)
-      audio.playForCard(meta, 'place');
+      // 🔊 ensure a placement sound for human visible cards (non-traps) — queued first
+      await qPlayForCard(meta, 'place');
 
       const n = String(meta?.name || '').toLowerCase();
       const text = `${String(meta?.effect || '')} ${String(meta?.logic_action || '')}`.toLowerCase();
