@@ -856,7 +856,7 @@
         "type":"Tactical",
         "effect":"Reveal the next 3 cards in both players' decks",
         "logic_action":"Play from hand. Reveal the next 3 cards in both players' decks. Discard this card after use.",
-        "tags":"recon, face_down, trap_ready, flip_reveal",
+        "tags":"recon",
         "card_animation":null,
         "image":"061_Binoculars_Tactical.png",
         "card_emoji":"\ud83e\udded",
@@ -926,7 +926,7 @@
         "type":"Tactical",
         "effect":"Reveal all hidden trap cards in play",
         "logic_action":"Play from hand. Reveal all enemy trap cards placed face-down. Discard after use.",
-        "tags":"intel, combo_trap, face_down, trap_ready, flip_reveal, hidden",
+        "tags":"intel, combo_trap",
         "card_animation":null,
         "image":"066_Headtorch_Tactical.png",
         "card_emoji":"\ud83e\udded",
@@ -954,7 +954,7 @@
         "type":"Tactical",
         "effect":"If opponent plays a card next turn, deal 15 DMG",
         "logic_action":"Place face-down on field. If opponent plays a card next turn, deal 15 DMG and stun for 1 turn. Discard after activation.",
-        "tags":"trap, stun, skip, face_down, trap_ready, flip_reveal, hidden",
+        "tags":"stun, skip",
         "card_animation":null,
         "image":"068_Tripwire_Tactical.png",
         "card_emoji":"\ud83e\udded",
@@ -1492,7 +1492,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"  
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"  
         } 
     },
     {
@@ -1507,7 +1508,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"  
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"  
         } 
     },
     {
@@ -1522,7 +1524,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
-          "fire": "explosion.mp3"
+          "fire": "explosion.mp3",
+          "resolve": "explosion.mp3"  
         }
     },
     {
@@ -1537,7 +1540,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
-          "fire": "explosion.mp3"
+          "fire": "explosion.mp3",
+          "resolve": "explosion.mp3"  
         }
     },
     {
@@ -1552,7 +1556,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "explosion.mp3"
+          "fire": "explosion.mp3",
+          "resolve": "explosion.mp3"          
         }
     },
     {
@@ -1567,7 +1572,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"   
         } 
     },
     {
@@ -1582,7 +1588,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"   
         } 
     },
     {
@@ -1597,7 +1604,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"   
         } 
     },
     {
@@ -1612,7 +1620,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
-          "fire": "explosion.mp3"
+          "fire": "explosion.mp3",
+          "resolve": "explosion.mp3" 
         }
     },
     {
@@ -1627,7 +1636,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3" 
         } 
     },
     {
@@ -1642,7 +1652,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"   
         } 
     },
     {
@@ -1657,7 +1668,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap sounds.mp3"   
         } 
     },
     {
@@ -1672,7 +1684,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3",
+          "resolve": "trap-sounds.mp3"   
         } 
     },
     {
@@ -1687,7 +1700,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",  
-          "fire": "explosion.mp3"
+          "fire": "explosion.mp3",
+          "resolve": "explosion.mp3"   
         }
     },
     {
@@ -1702,7 +1716,8 @@
         "card_emoji":"\ud83e\udde8",
         "sfx": {
           "place": "mixkit-mechanical-crate-pick-up-3154.wav",
-          "fire": "trap sounds.mp3"    
+          "fire": "trap sounds.mp3"
+          "resolve": "trap sounds.mp3"   
         } 
     },
     {
