@@ -2,10 +2,10 @@
 const DEFAULTS = {
   bgSrc: '/audio/bg/Follow the Trail.mp3',
   sfxBase: '/audio/sfx/',
-  volume: 0.65,     // sfx volume
-  bgVolume: 0.35,   // bg volume
-  gapMs: 180,       // spacing between queued SFX
-  sfxTimeoutMs: 4000, // fallback if 'ended' never fires
+  volume: 0.65,        // sfx volume
+  bgVolume: 0.35,      // bg volume
+  gapMs: 180,          // spacing between queued SFX for queued channels
+  sfxTimeoutMs: 4000,  // fallback if 'ended' never fires
 };
 
 const store = {
@@ -23,11 +23,22 @@ let bgAudio = null;
 /* ---------------- internals ---------------- */
 const sleep = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
+// Listeners waiting for unlock (to retry play() if it was gesture-blocked)
+const unlockWaiters = [];
+function whenUnlocked() {
+  if (store.unlocked) return Promise.resolve();
+  return new Promise(res => unlockWaiters.push(res));
+}
+
 function makeAudio(src, vol) {
   const a = new Audio(src);
   a.preload = 'auto';
   a.volume = Math.max(0, Math.min(1, vol));
   a.muted = store.muted;
+  a.addEventListener('error', (e) => {
+    // Give a helpful path hint in console for missing files
+    console.warn('[audio] element error for', src, e?.message || e);
+  }, { once: true });
   return a;
 }
 
@@ -36,11 +47,15 @@ function getPrimed(url) {
   if (!a) {
     a = makeAudio(url, store.volume);
     cache.set(url, a);
+    // Nudge fetch; if blocked, it's fine—we'll retry on first play()
+    try { a.load(); } catch {}
   }
   // clone so multiple same SFX can overlap
   const inst = a.cloneNode(true);
   inst.volume = store.muted ? 0 : store.volume;
   inst.muted = store.muted;
+  // ensure fresh start
+  try { inst.currentTime = 0; } catch {}
   return inst;
 }
 
@@ -51,23 +66,44 @@ function makeBg(src) {
   return bgAudio;
 }
 
+// Robust play that retries after user-gesture unlock if blocked
 function safePlay(a) {
-  if (!a) return;
-  a.play().catch(() => {}); // ignore gesture errors; unlocked later
+  if (!a) return Promise.resolve(false);
+  const tryOnce = () => a.play().then(() => true).catch(async (err) => {
+    const blocked = !store.unlocked || String(err?.name).includes('NotAllowed');
+    if (blocked) {
+      if (store.debug) console.log('[audio] play() blocked; waiting for unlock');
+      await whenUnlocked();
+      try { await a.play(); return true; } catch (e2) {
+        console.warn('[audio] play() failed after unlock:', e2?.message || e2);
+        return false;
+      }
+    }
+    console.warn('[audio] play() error:', err?.message || err);
+    return false;
+  });
+  return tryOnce();
 }
 
 function installUnlockOnce() {
   if (store._unlockInstalled) return;
   store._unlockInstalled = true;
-  const unlock = () => {
+  const unlock = async () => {
     store.unlocked = true;
     if (!bgAudio) makeBg(DEFAULTS.bgSrc);
-    safePlay(bgAudio);
+    try { await bgAudio.play(); } catch {}
+    // Resolve pending waiters
+    while (unlockWaiters.length) {
+      try { unlockWaiters.shift()?.(); } catch {}
+    }
     document.removeEventListener('pointerdown', unlock);
     document.removeEventListener('keydown', unlock);
+    document.removeEventListener('touchstart', unlock);
   };
-  document.addEventListener('pointerdown', unlock, { once: true });
-  document.addEventListener('keydown', unlock, { once: true });
+  const opts = { once: true, passive: true, capture: true };
+  document.addEventListener('pointerdown', unlock, opts);
+  document.addEventListener('keydown', unlock, opts);
+  document.addEventListener('touchstart', unlock, opts);
 }
 
 function pathify(input) {
@@ -100,14 +136,29 @@ function chooseOneSfx(value) {
   return pick;
 }
 
+// Broader synonym coverage (more tolerant mapping)
 const KEY_SYNONYMS = {
   play: 'place',
+  set: 'place',
+  arm: 'place',
+  place: 'place',
+
   trigger: 'fire',
+  activated: 'fire',
+  activation: 'fire',
+  flip: 'fire',
+  proc: 'fire',
+  fired: 'fire',
+
   attack: 'resolve',
   shot: 'resolve',
   hit: 'resolve',
+  resolve: 'resolve',
+
   remove: 'discard',
   toss: 'discard',
+  clear: 'discard',
+  destroyed: 'discard',
 };
 
 function readSfxMap(meta) {
@@ -180,6 +231,10 @@ function sfxByType(meta, event = 'resolve') {
 -------------------------------------------------*/
 const channels = new Map(); // name -> { queue: [], processing: false }
 
+// small dedupe window to avoid accidental double-fires in same tick
+const recentFire = new Map(); // url -> ts
+const DEDUPE_MS = 80;
+
 function getChannelState(name = 'default') {
   let s = channels.get(name);
   if (!s) {
@@ -191,6 +246,14 @@ function getChannelState(name = 'default') {
 
 function _playOneUrl(url) {
   if (!url || store.muted) return Promise.resolve();
+  const now = performance.now();
+  const last = recentFire.get(url) || 0;
+  if (now - last < DEDUPE_MS) {
+    if (store.debug) console.log('[audio] dedupe skip', url);
+    return Promise.resolve();
+  }
+  recentFire.set(url, now);
+
   const a = getPrimed(url);
 
   return new Promise(res => {
@@ -199,21 +262,30 @@ function _playOneUrl(url) {
       if (done) return;
       done = true;
       a.removeEventListener('ended', onEnd);
-      a.removeEventListener('error', onEnd);
+      a.removeEventListener('error', onErr);
+      clearTimeout(tid);
       res();
     };
     const onEnd = () => cleanup();
+    const onErr = (e) => {
+      console.warn('[audio] playback error for', url, e?.message || e);
+      cleanup();
+    };
 
     a.addEventListener('ended', onEnd, { once: true });
-    a.addEventListener('error', onEnd, { once: true });
+    a.addEventListener('error', onErr, { once: true });
 
     // Fallback timeout
     const durMs = Number.isFinite(a.duration) && a.duration > 0
       ? Math.ceil(a.duration * 1000) + 50
       : DEFAULTS.sfxTimeoutMs;
-    setTimeout(cleanup, durMs);
+    const tid = setTimeout(() => {
+      if (store.debug) console.log('[audio] timeout ended for', url);
+      cleanup();
+    }, durMs);
 
-    try { safePlay(a); } catch {}
+    // Attempt play; if blocked, safePlay() retries after unlock
+    safePlay(a).then(() => {}).catch(() => {});
   });
 }
 
@@ -336,7 +408,6 @@ export const audio = {
         await this.play(step, baseOpts);
       } else if (step.meta) {
         const ev = step.event || 'resolve';
-        // allow a step to override routing
         await this.playForCard(step.meta, ev, { ...baseOpts, ...step.opts });
       } else if (step.url) {
         await this.play(step.url, baseOpts);
