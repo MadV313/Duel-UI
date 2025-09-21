@@ -53,8 +53,7 @@ function makeBg(src) {
 
 function safePlay(a) {
   if (!a) return;
-  // browsers require a user gesture before first play — we “unlock” below
-  a.play().catch(() => {});
+  a.play().catch(() => {}); // ignore gesture errors; unlocked later
 }
 
 function installUnlockOnce() {
@@ -90,10 +89,8 @@ function chooseOneSfx(value) {
   if (Array.isArray(value)) {
     list = value;
   } else if (typeof value === 'string') {
-    // allow comma-separated convenience in JSON
     list = value.split(',').map(s => s.trim()).filter(Boolean);
   } else if (typeof value === 'object') {
-    // unexpected, ignore here (handled earlier)
     return null;
   }
 
@@ -104,7 +101,6 @@ function chooseOneSfx(value) {
 }
 
 const KEY_SYNONYMS = {
-  // attempt to be forgiving with JSON keys
   play: 'place',
   trigger: 'fire',
   attack: 'resolve',
@@ -119,12 +115,10 @@ function readSfxMap(meta) {
   if (!map) return null;
 
   if (typeof map === 'string' || Array.isArray(map)) {
-    // Single value means "use for whatever event is requested"
     return { __default: map };
   }
 
   if (typeof map === 'object') {
-    // normalize keys + synonyms
     const out = {};
     for (const [k, v] of Object.entries(map)) {
       const key = String(KEY_SYNONYMS[k] || k).toLowerCase();
@@ -180,70 +174,120 @@ function sfxByType(meta, event = 'resolve') {
   return url;
 }
 
-/* ---------------- simple SFX queue ---------------- */
-const sfxQueue = [];
-let processingQueue = false;
+/* ---------------- channel mixer ----------------
+   - default: queued (pacing)
+   - trap:    overlap (mix immediately)
+-------------------------------------------------*/
+const channels = new Map(); // name -> { queue: [], processing: false }
 
-function _enqueueUrl(url, { gapMs } = {}) {
+function getChannelState(name = 'default') {
+  let s = channels.get(name);
+  if (!s) {
+    s = { queue: [], processing: false };
+    channels.set(name, s);
+  }
+  return s;
+}
+
+function _playOneUrl(url) {
+  if (!url || store.muted) return Promise.resolve();
+  const a = getPrimed(url);
+
+  return new Promise(res => {
+    let done = false;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      a.removeEventListener('ended', onEnd);
+      a.removeEventListener('error', onEnd);
+      res();
+    };
+    const onEnd = () => cleanup();
+
+    a.addEventListener('ended', onEnd, { once: true });
+    a.addEventListener('error', onEnd, { once: true });
+
+    // Fallback timeout
+    const durMs = Number.isFinite(a.duration) && a.duration > 0
+      ? Math.ceil(a.duration * 1000) + 50
+      : DEFAULTS.sfxTimeoutMs;
+    setTimeout(cleanup, durMs);
+
+    try { safePlay(a); } catch {}
+  });
+}
+
+/**
+ * Enqueue or overlap-play a URL on a named channel.
+ * opts:
+ *  - channel: 'default' | 'trap' | <custom>
+ *  - policy:  'queue' (serialize) | 'overlap' (play immediately)
+ *  - gapMs:   inter-item delay for queued playback
+ */
+function _enqueueUrl(url, { gapMs, channel = 'default', policy = 'queue' } = {}) {
+  if (!url) return Promise.resolve();
+
+  if (policy === 'overlap') {
+    // play immediately, independent of any queue
+    return _playOneUrl(url);
+  }
+
+  const ch = getChannelState(channel);
   const item = {
     url,
     gapMs: Number.isFinite(gapMs) ? gapMs : DEFAULTS.gapMs,
   };
+
   return new Promise(resolve => {
     item._resolve = resolve;
-    sfxQueue.push(item);
-    if (!processingQueue) _processQueue();
+    ch.queue.push(item);
+    if (!ch.processing) _processChannel(channel);
   });
 }
 
-async function _processQueue() {
-  processingQueue = true;
+async function _processChannel(channel = 'default') {
+  const ch = getChannelState(channel);
+  if (ch.processing) return;
+  ch.processing = true;
   try {
-    while (sfxQueue.length) {
-      const { url, gapMs, _resolve } = sfxQueue.shift();
+    while (ch.queue.length) {
+      const { url, gapMs, _resolve } = ch.queue.shift();
 
       if (!url || store.muted) {
-        // nothing to play or muted: resolve immediately but keep cadence
         try { _resolve?.(); } catch {}
         if (gapMs > 0) await sleep(gapMs);
         continue;
       }
 
-      const a = getPrimed(url);
-
-      const playPromise = new Promise(res => {
-        let done = false;
-        const cleanup = () => {
-          if (done) return;
-          done = true;
-          a.removeEventListener('ended', onEnd);
-          a.removeEventListener('error', onEnd);
-          res();
-        };
-        const onEnd = () => cleanup();
-        a.addEventListener('ended', onEnd, { once: true });
-        a.addEventListener('error', onEnd, { once: true });
-
-        // Fallback: if metadata knows duration, use it; otherwise default timeout
-        const durMs = Number.isFinite(a.duration) && a.duration > 0
-          ? Math.ceil(a.duration * 1000) + 50
-          : DEFAULTS.sfxTimeoutMs;
-        setTimeout(cleanup, durMs);
-      });
-
-      try {
-        safePlay(a);
-      } catch {
-        // ignore playback errors, still advance queue
-      }
-
-      await playPromise;
+      await _playOneUrl(url);
       try { _resolve?.(); } catch {}
       if (gapMs > 0) await sleep(gapMs);
     }
   } finally {
-    processingQueue = false;
+    ch.processing = false;
   }
+}
+
+/* ------------- channel routing helpers ------------- */
+function classifyChannelFor(meta, event, given = {}) {
+  const ev = String(event || 'resolve').toLowerCase();
+  const type = String(meta?.type || '').toLowerCase();
+
+  // default routing
+  let channel = 'default';
+  let policy = 'queue';
+
+  // Traps should cut through and mix on their own lane.
+  if (ev === 'fire' || type === 'trap') {
+    channel = 'trap';
+    policy = 'overlap';
+  }
+
+  // allow explicit overrides from caller
+  if (given.channel) channel = given.channel;
+  if (given.policy) policy = given.policy;
+
+  return { channel, policy, gapMs: given.gapMs };
 }
 
 /* ---------------- public API ---------------- */
@@ -263,9 +307,9 @@ export const audio = {
   stopBg() { try { bgAudio?.pause(); } catch {} },
   isBgPlaying() { return !!(bgAudio && !bgAudio.paused); },
 
-  // SFX (queued)
+  // SFX (supports channels)
   play(nameOrUrl, opts = {}) {
-    // allow array input here too (pick one randomly)
+    // allow array input (pick one randomly)
     if (Array.isArray(nameOrUrl)) {
       const pick = chooseOneSfx(nameOrUrl);
       if (!pick) return Promise.resolve();
@@ -279,25 +323,30 @@ export const audio = {
   playForCard(meta, event = 'resolve', opts = {}) {
     const url = sfxByType(meta, event);
     if (!url) return Promise.resolve();
-    return _enqueueUrl(url, opts);
+    const routed = classifyChannelFor(meta, event, opts);
+    return _enqueueUrl(url, routed);
   },
 
-  // Convenience: queue multiple steps in order
-  async sequence(steps = [], { gapMs } = {}) {
+  // Convenience: queue multiple steps in order on a chosen channel
+  async sequence(steps = [], { gapMs, channel = 'default', policy = 'queue' } = {}) {
     for (const step of steps) {
       if (!step) continue;
+      const baseOpts = { gapMs, channel, policy };
       if (typeof step === 'string' || Array.isArray(step)) {
-        await this.play(step, { gapMs });
+        await this.play(step, baseOpts);
       } else if (step.meta) {
-        await this.playForCard(step.meta, step.event || 'resolve', { gapMs });
+        const ev = step.event || 'resolve';
+        // allow a step to override routing
+        await this.playForCard(step.meta, ev, { ...baseOpts, ...step.opts });
       } else if (step.url) {
-        await this.play(step.url, { gapMs });
+        await this.play(step.url, baseOpts);
       }
     }
   },
 
   clearQueue() {
-    sfxQueue.length = 0;
+    // clear all channels
+    for (const ch of channels.values()) ch.queue.length = 0;
   },
 
   // Volume / mute
