@@ -120,6 +120,18 @@ function ensureArrays(p) {
   p.buffs ||= {};
 }
 
+/* ---------- SFX compatibility: trap fire ---------- */
+/** Prefer audio.playTrapSfx if the audio module exposes it; otherwise fall back. */
+function playTrapSfx(trapMetaOrCard) {
+  const meta = trapMetaOrCard?.cardId ? getMeta(trapMetaOrCard.cardId) : trapMetaOrCard;
+  try {
+    if (typeof audio.playTrapSfx === 'function') {
+      return audio.playTrapSfx(meta);
+    }
+  } catch {}
+  return audio.playForCard(meta, 'fire');
+}
+
 /* ---------- Human “place” SFX detector (player1 only) ---------- */
 const _lastFieldCounts = { player1: new Map() };
 const _firstSeenField = { player1: true };
@@ -536,7 +548,7 @@ async function triggerOneTrap(defenderKey) {
   await wait(140);
 
   // 🔊 Play the trap reveal/fire SFX BEFORE its effect resolves
-  audio.playForCard(meta, 'fire');
+  playTrapSfx(meta);
 
   // Small gap so the fire SFX is audible before resolution triggers more sounds.
   await wait(220);
