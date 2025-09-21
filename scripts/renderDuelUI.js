@@ -15,11 +15,6 @@ const SLOW_MO_MS = 1000;     // each step ~1.0s
 const MIN_TURN_MS = 7500;    // min visible bot turn ~7.5s
 const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
 
-/* 🔊 trap SFX / trigger flow tuning */
-const TRAP_PRE_DELAY_MS = 180;      // delay before firing trap SFX (lets "place" breathe)
-const TRAP_FIRE_RINGOUT_MS = 650;   // time reserved after trap SFX so it isn't stomped
-const TRAP_RATE_LIMIT_MS = 600;     // minimum spacing between trap triggers per defender
-
 /* ---------------- allCards loader ---------------- */
 let allCards = [];
 let allCardsReady = false;
@@ -522,24 +517,7 @@ function cleanupEndOfTurnLocal(playerKey) {
 }
 
 /* ---------- Trap activation (UI side) ---------- */
-/** Guard: only allow one reactive trap per short window & per stack. */
-function canTriggerTrap(defenderKey, stackId) {
-  const now = Date.now();
-  duelState._trapRate ||= {};
-  const prev = duelState._trapRate[defenderKey] || 0;
-  if (now - prev < TRAP_RATE_LIMIT_MS) return false;
-  duelState._trapRate[defenderKey] = now;
-
-  // per-resolution stack guard
-  duelState._trapStacks ||= {};
-  duelState._trapStacks[stackId] ||= {};
-  if (duelState._trapStacks[stackId][defenderKey]) return false;
-  duelState._trapStacks[stackId][defenderKey] = true;
-
-  return true;
-}
-
-async function triggerOneTrap(defenderKey, { stackId } = {}) {
+async function triggerOneTrap(defenderKey) {
   const D = duelState.players[defenderKey];
   if (!D) return false;
   ensureArrays(D);
@@ -554,33 +532,24 @@ async function triggerOneTrap(defenderKey, { stackId } = {}) {
 
   const meta = getMeta(trap.cardId);
 
-  // Allow any previous "place" SFX to breathe
-  await wait(TRAP_PRE_DELAY_MS);
+  // Give the previous "place" SFX a tiny head start to avoid choking.
+  await wait(140);
 
-  // 🔊 Prefer specific trap 'fire' SFX; fall back to a generic trap sound
-  const hasSpecificFire = !!(meta && meta.sfx && meta.sfx.fire);
-  if (hasSpecificFire) {
-    audio.playForCard(meta, 'fire');
-  } else {
-    audio.play('trap sounds.mp3');
-  }
+  // 🔊 Play the trap reveal/fire SFX BEFORE its effect resolves
+  audio.playForCard(meta, 'fire');
 
-  // Give the trap SFX time before other resolution sounds
-  await wait(TRAP_FIRE_RINGOUT_MS);
+  // Small gap so the fire SFX is audible before resolution triggers more sounds.
+  await wait(220);
 
-  // Resolve the trap's effect under defender ownership (use same stackId)
-  await resolveImmediateEffect(meta, defenderKey, { stackId });
+  // Now resolve the trap's effect as owned by the defender
+  await resolveImmediateEffect(meta, defenderKey);
 
   try { console.log('[trap] fired', { owner: defenderKey, id: trap.cardId }); } catch {}
   return true;
 }
 
 /* -------------- Effect resolver -------------- */
-async function resolveImmediateEffect(meta, ownerKey, opts = {}) {
-  // establish a per-resolution stack id for trap-guarding
-  duelState._stackSeq = (duelState._stackSeq || 0) + 1;
-  const stackId = opts.stackId || duelState._stackSeq;
-
+async function resolveImmediateEffect(meta, ownerKey) {
   const you = ownerKey;
   const foe = ownerKey === 'player1' ? 'player2' : 'player1';
 
@@ -593,12 +562,7 @@ async function resolveImmediateEffect(meta, ownerKey, opts = {}) {
     tags.has('infected') ||
     /\binfected\b/.test(name);
 
-  // 🔒 Only allow one reactive trap per "action" and rate-limit duplicates
-  if (isAtkOrInf && canTriggerTrap(foe, stackId)) {
-    await triggerOneTrap(foe, { stackId });
-    // Ensure bot/human trap SFX gets audible priority before proceeding
-    await wait(120); // small spacer beyond TRAP_FIRE_RINGOUT_MS inside trigger
-  }
+  if (isAtkOrInf) await triggerOneTrap(foe);
   if (!meta) return;
 
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
@@ -694,7 +658,7 @@ async function resolveHumanNonTrapCardsOnce() {
 
       // 🔊 ensure a placement sound for human visible cards (non-traps)
       audio.playForCard(meta, 'place');
-      // Tiny delay so a trap's 'fire' SFX that follows doesn't collide with this too closely.
+      // Tiny delay so a trap's 'fire' SFX that follows doesn't collide with this.
       await wait(140);
 
       const n = String(meta?.name || '').toLowerCase();
