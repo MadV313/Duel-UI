@@ -547,7 +547,13 @@ async function triggerOneTrap(defenderKey) {
   // Give the previous "place" SFX a tiny head start to avoid choking.
   await wait(140);
 
-  // 🔊 Play the trap reveal/fire SFX BEFORE its effect resolves
+  // 🔊 Log the mapping then play the trap reveal/fire SFX BEFORE its effect resolves
+  console.log('[trap] SFX pick', {
+    owner: defenderKey,
+    id: trap.cardId,
+    name: meta?.name,
+    sfx: meta?.sfx || meta?.audio || '(fallback trap_fire.mp3)'
+  });
   playTrapSfx(meta);
 
   // Small gap so the fire SFX is audible before resolution triggers more sounds.
@@ -767,7 +773,7 @@ function setTurnText() {
   el.style.display = '';
 
   if (duelState.winner) {
-    el.textContent = `Winner: ${duelState.winner} (${nameOf(duelState.winner)})`;
+    el.textContent = `Winner: ${duelState.winner} (${nameOf(winnerKey)})`;
     el.classList.remove('hidden');
     return;
   }
@@ -1284,6 +1290,7 @@ export async function renderDuelUI() {
     bgSrc: '/audio/bg/Follow the Trail.mp3',
     sfxBase: '/audio/sfx/',
   });
+  audio.setDebug(true);           // <<< enable audio debug logs
   audio.initAutoplayUnlock();
   installSoundToggleUI();
 
