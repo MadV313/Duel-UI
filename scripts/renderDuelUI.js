@@ -120,6 +120,12 @@ function ensureArrays(p) {
   p.buffs ||= {};
 }
 
+function changeHP(playerKey, delta) {
+  const p = duelState?.players?.[playerKey];
+  if (!p) return;
+  p.hp = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
+}
+
 /* ---------- SFX compatibility: trap fire ---------- */
 /** Prefer audio.playTrapSfx if the audio module exposes it; otherwise fall back. */
 function playTrapSfx(trapMetaOrCard) {
@@ -565,9 +571,8 @@ async function triggerOneTrap(defenderKey) {
   await wait(120);
 
   // 🔊 Play trap fire SFX and WAIT before resolving (key fix)
-  try {
-    await playTrapSfx(meta);
-  } catch {}
+  try { playTrapSfx(meta); } catch {}
+  await wait(220); // small gap so the fire SFX is heard before resolution
 
   // Now resolve the trap's effect as owned by the defender
   await resolveImmediateEffect(meta, defenderKey);
@@ -599,7 +604,6 @@ async function resolveImmediateEffect(meta, ownerKey) {
   const dmg = damageFromText(text);
   if (dmg > 0) {
     changeHP(foe, -dmg);
-    audio.play('attack_hit.mp3');
     await wait(90);
   }
 
@@ -628,7 +632,10 @@ async function resolveImmediateEffect(meta, ownerKey) {
   if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
   // skip next draw
-  if (/skip\s+next\s+draw/.test(text)) duelState.players[you].skipNextDraw = true;
+  if (/skip\s+next\s+draw/.test(text)) {
+   duelState.players[you].buffs ||= {};
+   duelState.players[you].buffs.skipNextDraw = true;
+ }
 
   // destroy/remove enemy field card
   if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
