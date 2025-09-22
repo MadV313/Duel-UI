@@ -5,6 +5,7 @@
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
 import { triggerAnimation } from './animations.js';
+import { audio } from './audio.js';
 
 let coinFlipInProgress = false;
 
@@ -141,6 +142,16 @@ export function flipCoin(forceWinner = null, opts = {}) {
     }
     ensureCoinGif();                  // make sure an image path is valid
     triggerAnimation?.('combo');      // small flair; safe if undefined
+
+    // 🔊 Play coin-flip SFX on a UI channel (overlaps, not queued)
+    try {
+      if (typeof audio.coinFlip === 'function') {
+        audio.coinFlip();
+      } else {
+        // Fallback if older audio.js without coinFlip() is present
+        audio.play('coin_flip.mp3', { channel: 'ui', policy: 'overlap' });
+      }
+    } catch {}
 
     // Force a reflow so browsers actually paint before we schedule the reveal
     // (prevents the "skip" feel on some devices)
