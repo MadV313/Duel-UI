@@ -581,6 +581,12 @@ async function triggerOneTrap(defenderKey) {
   return true;
 }
 
+/* --------------------- HIT-SFX suppression --------------------- */
+// Call this right before a per-card resolve SFX to suppress the generic "hit" SFX elsewhere.
+function suppressGenericHit(ms = 300) {
+  try { duelState._suppressHitSfxUntil = Date.now() + Number(ms || 0); } catch {}
+}
+
 /* -------------- Effect resolver -------------- */
 async function resolveImmediateEffect(meta, ownerKey) {
   const you = ownerKey;
@@ -633,9 +639,9 @@ async function resolveImmediateEffect(meta, ownerKey) {
 
   // skip next draw
   if (/skip\s+next\s+draw/.test(text)) {
-   duelState.players[you].buffs ||= {};
-   duelState.players[you].buffs.skipNextDraw = true;
- }
+    duelState.players[you].buffs ||= {};
+    duelState.players[you].buffs.skipNextDraw = true;
+  }
 
   // destroy/remove enemy field card
   if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
@@ -660,8 +666,11 @@ async function resolveImmediateEffect(meta, ownerKey) {
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
-  // 🔊 per-card resolve SFX (await + channel to serialize vs trap fire)
-  try { await audio.playForCard(meta, 'resolve', { channel: 'combat' }); } catch {}
+  // 🔊 per-card resolve SFX — set temporary suppression for generic hit SFX, then play.
+  try {
+    suppressGenericHit(300); // <<< key line: prevents generic hit SFX from overlapping this resolve SFX
+    await audio.playForCard(meta, 'resolve', { channel: 'combat' });
+  } catch {}
   await wait(90);
 
   detectWinner();
