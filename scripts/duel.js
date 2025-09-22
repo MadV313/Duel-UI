@@ -65,6 +65,16 @@ function ensureZones(p) {
   p.buffs       ||= {}; // generic bag: { extraDrawPerTurn, blockHealTurns, skipNextTurn, skipNextDraw, nextAttackBonus, nextAttackMult, ... }
 }
 
+/* ---------- SFX guards to avoid duplicate hit sounds ---------- */
+let _lastDamageSfxAt = 0;
+function _playGenericHitOnce() {
+  const now = Date.now();
+  if (duelState._suppressGenericHit) return; // card-specific SFX active
+  if (now - _lastDamageSfxAt < 250) return;  // throttle bursty sequences
+  _lastDamageSfxAt = now;
+  try { audio.play('attack_hit.mp3'); } catch {}
+}
+
 /** HP adjust with clamping (0–MAX_HP), obeying block-heal */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
@@ -76,10 +86,8 @@ function changeHP(playerKey, delta) {
     return;
   }
 
-  // 🔊 play hit sound for *any* damage event
-  if (delta < 0) {
-    try { audio.play('attack_hit.mp3'); } catch {}
-  }
+  // 🔊 generic hit SFX, but guarded
+  if (delta < 0) _playGenericHitOnce();
 
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
@@ -557,7 +565,9 @@ function resolveImmediateEffect(meta, ownerKey) {
     }
   }
 
-  // 🔊 generic per-card resolve sound (lets per-card mappings work)
+  // 🔊 per-card resolve SFX; temporarily suppress generic hit so it doesn't double up
+  duelState._suppressGenericHit = true;
+  setTimeout(() => { duelState._suppressGenericHit = false; }, 400);
   try { audio.playForCard(meta, 'resolve'); } catch {}
 }
 
