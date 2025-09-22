@@ -6,6 +6,7 @@ const DEFAULTS = {
   bgVolume: 0.35,      // bg volume
   gapMs: 180,          // spacing between queued SFX for queued channels
   sfxTimeoutMs: 4000,  // fallback if 'ended' never fires
+  coinFlipFile: 'coin_flip.mp3', // new: coin flip sfx name (relative to sfxBase unless absolute)
 };
 
 const store = {
@@ -228,12 +229,31 @@ function sfxByType(meta, event = 'resolve') {
 /* ---------------- channel mixer ----------------
    - default: queued (pacing)
    - trap:    overlap (mix immediately)
+   - ui:      overlap (UI blips like coin flip)
 -------------------------------------------------*/
 const channels = new Map(); // name -> { queue: [], processing: false }
 
-// small dedupe window to avoid accidental double-fires in same tick
-const recentFire = new Map(); // url -> ts
-const DEDUPE_MS = 80;
+// small dedupe window to avoid accidental double-fires in same tick (general)
+const recentFire = new Map(); // key/url -> ts
+
+// semantic per-sound dedupe windows (ms)
+const SEMANTIC_DEDUPE = [
+  { test: /attack_hit\.mp3$/i, window: 260, key: 'attack_hit' }, // fixes double “hit” from explicit + fallback
+  { test: /trap_fire\.mp3$/i,  window: 60,  key: 'trap_fire' },  // allow quick successive traps but avoid micro-dupes
+  { test: /card_place\.mp3$/i, window: 100, key: 'card_place' },
+  { test: /trap_set\.mp3$/i,   window: 100, key: 'trap_set' },
+];
+
+function dedupeKeyForUrl(url) {
+  try {
+    const file = url.split('?')[0].split('/').pop() || url;
+    for (const rule of SEMANTIC_DEDUPE) {
+      if (rule.test.test(file)) return { key: rule.key, window: rule.window };
+    }
+  } catch {}
+  // default/fallback window for identical URLs
+  return { key: url, window: 100 };
+}
 
 function getChannelState(name = 'default') {
   let s = channels.get(name);
@@ -246,13 +266,15 @@ function getChannelState(name = 'default') {
 
 function _playOneUrl(url) {
   if (!url || store.muted) return Promise.resolve();
+  const { key, window } = dedupeKeyForUrl(url);
+
   const now = performance.now();
-  const last = recentFire.get(url) || 0;
-  if (now - last < DEDUPE_MS) {
-    if (store.debug) console.log('[audio] dedupe skip', url);
+  const last = recentFire.get(key) || 0;
+  if (now - last < window) {
+    if (store.debug) console.log('[audio] dedupe skip', key, '→', url);
     return Promise.resolve();
   }
-  recentFire.set(url, now);
+  recentFire.set(key, now);
 
   const a = getPrimed(url);
 
@@ -292,7 +314,7 @@ function _playOneUrl(url) {
 /**
  * Enqueue or overlap-play a URL on a named channel.
  * opts:
- *  - channel: 'default' | 'trap' | <custom>
+ *  - channel: 'default' | 'trap' | 'ui' | <custom>
  *  - policy:  'queue' (serialize) | 'overlap' (play immediately)
  *  - gapMs:   inter-item delay for queued playback
  */
@@ -355,9 +377,15 @@ function classifyChannelFor(meta, event, given = {}) {
     policy = 'overlap';
   }
 
+  // “UI blips” can overlap (coin flip, button clicks if you add those later)
+  if (given.channel === 'ui') {
+    channel = 'ui';
+    policy = given.policy || 'overlap';
+  }
+
   // allow explicit overrides from caller
-  if (given.channel) channel = given.channel;
-  if (given.policy) policy = given.policy;
+  if (given.channel && given.channel !== 'ui') channel = given.channel;
+  if (given.policy && given.channel !== 'ui') policy = given.policy;
 
   return { channel, policy, gapMs: given.gapMs };
 }
@@ -397,6 +425,19 @@ export const audio = {
     if (!url) return Promise.resolve();
     const routed = classifyChannelFor(meta, event, opts);
     return _enqueueUrl(url, routed);
+  },
+
+  /** NEW: force the trap “fire” sound in the trap channel with overlap */
+  playTrapSfx(meta, opts = {}) {
+    const url = sfxByType(meta, 'fire');
+    if (!url) return Promise.resolve();
+    return _enqueueUrl(url, { ...opts, channel: 'trap', policy: 'overlap' });
+  },
+
+  /** NEW: coin flip helper (use when you show the GIF) */
+  coinFlip() {
+    const url = pathify(DEFAULTS.coinFlipFile);
+    return _enqueueUrl(url, { channel: 'ui', policy: 'overlap' });
   },
 
   // Convenience: queue multiple steps in order on a chosen channel
