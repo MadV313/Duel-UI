@@ -4,6 +4,7 @@ import { renderDuelUI as _renderDuelUI } from './renderDuelUI.js';
 import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 import allCards from './allCards.js';
+import { audio } from './audio.js';
 
 // --- Config (UI guards)
 const MAX_FIELD_SLOTS = 3;
@@ -74,6 +75,12 @@ function changeHP(playerKey, delta) {
     console.log(`[heal-block] Healing prevented on ${playerKey} (${delta} HP).`);
     return;
   }
+
+  // 🔊 play hit sound for *any* damage event
+  if (delta < 0) {
+    try { audio.play('attack_hit.mp3'); } catch {}
+  }
+
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
 }
@@ -319,6 +326,15 @@ function triggerOneTrap(defenderKey) {
   const meta = getMeta(trap.cardId);
   console.log('[trap] flipped', { defender: defenderKey, cardId: trap.cardId, name: meta?.name });
 
+  // 🔊 ensure the trap “fire” SFX cuts through (trap channel, overlap)
+  try {
+    if (typeof audio.playTrapSfx === 'function') {
+      audio.playTrapSfx(meta);
+    } else {
+      audio.playForCard(meta, 'fire', { channel: 'trap', policy: 'overlap' });
+    }
+  } catch {}
+
   // Force a frame so the player sees the flip BEFORE the effect resolves.
   try { _renderDuelUI(); } catch {}
 
@@ -540,6 +556,9 @@ function resolveImmediateEffect(meta, ownerKey) {
       }
     }
   }
+
+  // 🔊 generic per-card resolve sound (lets per-card mappings work)
+  try { audio.playForCard(meta, 'resolve'); } catch {}
 }
 
 /* ---------- BOT/REMOTE PLAY RESOLVER (important) ---------- */
