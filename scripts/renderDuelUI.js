@@ -166,9 +166,8 @@ function playPlaceSfxForNewFieldCards(playerKey = 'player1') {
     const delta = now - was;
     if (delta > 0) {
       const meta = getMeta(id);
-      for (let i = 0; i < delta; i++) {
-        audio.playForCard(meta, 'place'); // trap_set or card_place based on meta/type
-      }
+      // fire-and-forget is fine here to keep UI snappy
+      audio.playForCard(meta, 'place'); // trap_set or card_place based on meta/type
     }
   }
 
@@ -176,12 +175,24 @@ function playPlaceSfxForNewFieldCards(playerKey = 'player1') {
 }
 
 /* ---------------- winner detection ---------------- */
+function outOfCards(playerKey) {
+  try {
+    const P = duelState?.players?.[playerKey];
+    if (!P) return false;
+    // “No remaining plays”: no hand and no deck (field/traps don’t count as playable-from-hand)
+    return (Array.isArray(P.hand) ? P.hand.length : 0) === 0 &&
+           (Array.isArray(P.deck) ? P.deck.length : 0) === 0;
+  } catch { return false; }
+}
+
 function detectWinner() {
   try {
     if (duelState.winner) return duelState.winner;
+
     const p1 = Number(duelState?.players?.player1?.hp ?? MAX_HP);
     const p2 = Number(duelState?.players?.player2?.hp ?? MAX_HP);
 
+    // 1) HP checks
     if (p1 <= 0 && p2 <= 0) {
       duelState.winner = 'player1'; // tie-breaker
     } else if (p1 <= 0) {
@@ -189,22 +200,28 @@ function detectWinner() {
     } else if (p2 <= 0) {
       duelState.winner = 'player1';
     }
+
+    // 2) Out-of-cards checks (only if no HP winner yet)
+    if (!duelState.winner) {
+      const p1Out = outOfCards('player1');
+      const p2Out = outOfCards('player2');
+      if (p1Out && p2Out) {
+        duelState.winner = 'player1'; // tie-breaker
+      } else if (p1Out) {
+        duelState.winner = 'player2';
+      } else if (p2Out) {
+        duelState.winner = 'player1';
+      }
+    }
+
     if (duelState.winner) {
-      duelState.started = true;
-      console.log('[win] detected:', duelState.winner);
+      duelState.started = true; // keep your existing semantics
+      try { renderZones?.(); } catch {}
     }
     return duelState.winner || null;
   } catch {
     return null;
   }
-}
-
-function changeHP(playerKey, delta) {
-  const p = duelState?.players?.[playerKey];
-  if (!p) return;
-  const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? MAX_HP) + Number(delta)));
-  p.hp = next;
-  detectWinner();
 }
 
 /* ---------------- draw helpers ---------------- */
@@ -545,19 +562,12 @@ async function triggerOneTrap(defenderKey) {
   const meta = getMeta(trap.cardId);
 
   // Give the previous "place" SFX a tiny head start to avoid choking.
-  await wait(140);
+  await wait(120);
 
-  // 🔊 Log the mapping then play the trap reveal/fire SFX BEFORE its effect resolves
-  console.log('[trap] SFX pick', {
-    owner: defenderKey,
-    id: trap.cardId,
-    name: meta?.name,
-    sfx: meta?.sfx || meta?.audio || '(fallback trap_fire.mp3)'
-  });
-  playTrapSfx(meta);
-
-  // Small gap so the fire SFX is audible before resolution triggers more sounds.
-  await wait(220);
+  // 🔊 Play trap fire SFX and WAIT before resolving (key fix)
+  try {
+    await playTrapSfx(meta);
+  } catch {}
 
   // Now resolve the trap's effect as owned by the defender
   await resolveImmediateEffect(meta, defenderKey);
@@ -643,8 +653,8 @@ async function resolveImmediateEffect(meta, ownerKey) {
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
-  // 🔊 per-card resolve SFX (if defined) or sensible fallback
-  audio.playForCard(meta, 'resolve');
+  // 🔊 per-card resolve SFX (await + channel to serialize vs trap fire)
+  try { await audio.playForCard(meta, 'resolve', { channel: 'combat' }); } catch {}
   await wait(90);
 
   detectWinner();
@@ -675,7 +685,7 @@ async function resolveHumanNonTrapCardsOnce() {
       const meta = getMeta(card.cardId);
 
       // 🔊 ensure a placement sound for human visible cards (non-traps)
-      audio.playForCard(meta, 'place');
+      try { await audio.playForCard(meta, 'place', { channel: 'ui' }); } catch {}
       // Tiny delay so a trap's 'fire' SFX that follows doesn't collide with this.
       await wait(140);
 
@@ -719,7 +729,9 @@ async function botAutoPlayAssist() {
     console.log('[bot] place', { id: final.cardId, faceDown: final.isFaceDown });
     renderZones();
     await wait();
-    audio.playForCard(getMeta(final.cardId), 'place'); // trap_set or card_place
+
+    // 🔊 place SFX for bot play (await + ui channel)
+    try { await audio.playForCard(getMeta(final.cardId), 'place', { channel: 'ui' }); } catch {}
 
     duelState._uiPlayedThisTurn ||= [];
     duelState._uiPlayedThisTurn.push({ cardId: final.cardId, isFaceDown: final.isFaceDown });
@@ -773,7 +785,8 @@ function setTurnText() {
   el.style.display = '';
 
   if (duelState.winner) {
-    el.textContent = `Winner: ${duelState.winner} (${nameOf(winnerKey)})`;
+    const winnerKey = duelState.winner; // FIX: define winnerKey before use
+    el.textContent = `Winner: ${winnerKey} (${nameOf(winnerKey)})`;
     el.classList.remove('hidden');
     return;
   }
@@ -1074,8 +1087,8 @@ async function maybeRunBotTurn() {
           await wait();
           const meta = getMeta(final.cardId);
 
-          // 🔊 place SFX for fallback bot play
-          audio.playForCard(meta, 'place');
+          // 🔊 place SFX for fallback bot play (await + ui channel)
+          try { await audio.playForCard(meta, 'place', { channel: 'ui' }); } catch {}
 
           if (!final.isFaceDown) {
             await resolveImmediateEffect(meta, 'player2');
