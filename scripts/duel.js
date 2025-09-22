@@ -601,14 +601,23 @@ export function startTurnIfNeeded() {
 
   // Flag bucket: which player already consumed their start-of-turn this cycle
   duelState._startDrawDoneFor ||= { player1: false, player2: false };
-
-  if (duelState._startDrawDoneFor[active]) {
-    return false; // already handled this turn for this player
-  }
+  if (duelState._startDrawDoneFor[active]) return false; // already handled
 
   const A = duelState.players[active];
   if (!A) return false;
   ensureZones(A);
+
+  // ✅ Early exit if the active player has no hand AND no deck
+  try {
+    const noHand = !Array.isArray(A.hand) || A.hand.length === 0;
+    const noDeck = !Array.isArray(A.deck) || A.deck.length === 0;
+    if (noHand && noDeck) {
+      const foe = active === 'player1' ? 'player2' : 'player1';
+      duelState.winner = foe;
+      renderDuelUI(); // summary overlay path in renderDuelUI
+      return true;
+    }
+  } catch {}
 
   // Perform the automatic draw for the active player
   drawFor(active);
