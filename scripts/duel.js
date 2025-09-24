@@ -75,6 +75,15 @@ function _playGenericHitOnce() {
   try { audio.play('attack_hit.mp3'); } catch {}
 }
 
+// Once-per-turn per-defender guard for generic hit SFX
+function _playHitOncePerTurnFor(defenderKey) {
+  duelState._damageHitPlayedForTurn ||= { player1: false, player2: false };
+  if (duelState._suppressGenericHit) return;
+  if (duelState._damageHitPlayedForTurn[defenderKey]) return;
+  duelState._damageHitPlayedForTurn[defenderKey] = true;
+  try { audio.play('attack_hit.mp3'); } catch {}
+}
+
 /** HP adjust with clamping (0–MAX_HP), obeying block-heal */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
@@ -86,8 +95,8 @@ function changeHP(playerKey, delta) {
     return;
   }
 
-  // 🔊 generic hit SFX, but guarded
-  if (delta < 0) _playGenericHitOnce();
+  // 🔊 generic hit SFX, but only once per defender per turn
+  if (delta < 0) _playHitOncePerTurnFor(playerKey);
 
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
@@ -630,6 +639,9 @@ export function startTurnIfNeeded() {
 
   // Flag bucket: which player already consumed their start-of-turn this cycle
   duelState._startDrawDoneFor ||= { player1: false, player2: false };
+  // Ensure SFX-once-per-turn guard exists for this new cycle (defensive)
+  duelState._damageHitPlayedForTurn ||= { player1: false, player2: false };
+
   if (duelState._startDrawDoneFor[active]) return false; // already handled
 
   const A = duelState.players[active];
@@ -818,6 +830,9 @@ export async function endTurn() {
     // Reset start-of-turn flags so the new active can draw once
     duelState._startDrawDoneFor = { player1: false, player2: false };
 
+    // Reset once-per-turn SFX guard on turn change
+    duelState._damageHitPlayedForTurn = { player1: false, player2: false };
+
     // Handle skip for the NEW active player
     const A = duelState.players[next];
     ensureZones(A);
@@ -834,6 +849,9 @@ export async function endTurn() {
 
       // Reset flags again for the now-active player and start their turn
       duelState._startDrawDoneFor = { player1: false, player2: false };
+      // Also reset SFX guard at this second handoff
+      duelState._damageHitPlayedForTurn = { player1: false, player2: false };
+
       startTurnIfNeeded();
 
       triggerAnimation('turn');
