@@ -96,7 +96,10 @@ function changeHP(playerKey, delta) {
   }
 
   // 🔊 generic hit SFX, but only once per defender per turn
-  if (delta < 0) _playHitOncePerTurnFor(playerKey);
+  if (delta < 0) {
+    duelState._tookDamageThisTurn ||= { player1: false, player2: false };
+    duelState._tookDamageThisTurn[playerKey] = true;
+  }
 
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
@@ -822,6 +825,17 @@ export async function endTurn() {
 
     // Discard ephemerals + fired traps at end of THIS player's turn
     cleanupEndOfTurn(ending);
+
+    // 🔊 play exactly once at end of THIS player's turn if their opponent took damage
+    try {
+      duelState._tookDamageThisTurn ||= { player1: false, player2: false };
+      const foe = ending === 'player1' ? 'player2' : 'player1';
+      if (duelState._tookDamageThisTurn[foe]) {
+        audio.play('attack_hit.mp3');
+      }
+      // reset per-turn damage flags for the next turn
+      duelState._tookDamageThisTurn = { player1: false, player2: false };
+    } catch {}
 
     // Now pass the turn
     const next = ending === 'player1' ? 'player2' : 'player1';
