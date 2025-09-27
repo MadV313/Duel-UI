@@ -217,8 +217,13 @@ function sfxByType(meta, event = 'resolve') {
   } else if (ev === 'discard') {
     fallback = 'discard.mp3';
   } else if (ev === 'resolve') {
-    if (t === 'attack' || tags.has('gun') || tags.has('infected')) fallback = 'attack_hit.mp3';
-    else if (t === 'defense' || t === 'tactical' || t === 'loot') fallback = 'card_place.mp3';
+    // IMPORTANT: do NOT auto-map attacks/infected to attack_hit.mp3.
+    // The single end-of-turn hit cue is handled in duel.js.
+    if (t === 'defense' || t === 'tactical' || t === 'loot') {
+      fallback = 'card_place.mp3';
+    } else {
+      fallback = null; // no generic resolve SFX for attack/infected
+    }
   }
 
   const url = pathify(fallback);
