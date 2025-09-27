@@ -65,14 +65,26 @@ function ensureZones(p) {
   p.buffs       ||= {}; // generic bag: { extraDrawPerTurn, blockHealTurns, skipNextTurn, skipNextDraw, nextAttackBonus, nextAttackMult, ... }
 }
 
-/* ---------- SFX NOTE ----------
-   We now reserve attack_hit.mp3 exclusively for a single,
-   end-of-turn confirmation if (and only if) the ending player
-   took damage from an opponent's card during that turn.
-   No generic damage SFX fires from changeHP anymore.
----------------------------------*/
+/* ---------- SFX guards to avoid duplicate hit sounds ---------- */
+let _lastDamageSfxAt = 0;
+function _playGenericHitOnce() {
+  const now = Date.now();
+  if (duelState._suppressGenericHit) return; // card-specific SFX active
+  if (now - _lastDamageSfxAt < 250) return;  // throttle bursty sequences
+  _lastDamageSfxAt = now;
+  try { audio.play('attack_hit.mp3'); } catch {}
+}
 
-/** HP adjust with clamping (0–MAX_HP), obeying block-heal */
+// Once-per-turn per-defender guard for generic hit SFX (kept for compatibility; not used for the end-of-turn cue)
+function _playHitOncePerTurnFor(defenderKey) {
+  duelState._damageHitPlayedForTurn ||= { player1: false, player2: false };
+  if (duelState._suppressGenericHit) return;
+  if (duelState._damageHitPlayedForTurn[defenderKey]) return;
+  duelState._damageHitPlayedForTurn[defenderKey] = true;
+  try { audio.play('attack_hit.mp3'); } catch {}
+}
+
+/** Track damage taken this turn; clamp HP (0–MAX_HP), obey block-heal */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
   if (!p) return;
@@ -81,6 +93,12 @@ function changeHP(playerKey, delta) {
   if (delta > 0 && p.buffs?.blockHealTurns > 0) {
     console.log(`[heal-block] Healing prevented on ${playerKey} (${delta} HP).`);
     return;
+  }
+
+  // mark that THIS player took damage this turn
+  if (delta < 0) {
+    duelState._tookDamageThisTurn ||= { player1: false, player2: false };
+    duelState._tookDamageThisTurn[playerKey] = true;
   }
 
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
@@ -187,8 +205,7 @@ function consumeAttackBuff(playerKey, meta, baseDmg) {
   // Generic “gun buff” from Box of Ammo
   if (isGun && b.gunFlatBonus) {
     dmg += b.gunFlatBonus;
-    // one-shot bonus
-    P.buffs.gunFlatBonus = 0;
+    P.buffs.gunFlatBonus = 0; // one-shot bonus
   }
 
   return dmg;
@@ -206,11 +223,6 @@ function parseNumberPairTimes(s) {
 function damageFoe(foe, you, meta, base) {
   const amount = consumeAttackBuff(you, meta, base);
   changeHP(foe, -amount);
-
-  // mark that the defender took damage from a *card* this turn
-  duelState._tookHitDueToCardThisTurn ||= { player1: false, player2: false };
-  duelState._tookHitDueToCardThisTurn[foe] = true;
-
   console.log(`⚔️ ${meta.name}: dealt ${amount} DMG to ${foe}`);
   triggerAnimation('bullet');
 }
@@ -241,8 +253,7 @@ function stealOneFromHand(srcKey, dstKey, filterFn) {
 
   const pick = pool[Math.floor(Math.random() * pool.length)];
   const [card] = src.hand.splice(pick.i, 1);
-  // Normalize visibility
-  const entry = toEntry(card, dstKey === 'player2');
+  const entry = toEntry(card, dstKey === 'player2'); // normalize visibility
   dst.hand.push(entry);
   console.log(`🕵️ Stole ${getMeta(entry.cardId)?.name || entry.cardId} from ${srcKey} → ${dstKey}`);
   return true;
@@ -356,9 +367,7 @@ function triggerOneTrap(defenderKey) {
 }
 
 function trapAutoTriggersNow(meta) {
-  // We intentionally DO NOT auto-trigger traps on play anymore.
-  // Leaving the function in case some future card text needs it again.
-  return false;
+  return false; // kept intentionally
 }
 
 /**
@@ -373,7 +382,7 @@ function resolveImmediateEffect(meta, ownerKey) {
   ensureZones(duelState.players[you]);
   ensureZones(duelState.players[foe]);
 
-  const type = txt(meta.type); // keep for infected-specific logic later
+  const type = txt(meta.type);
   const etext = `${txt(meta.effect)} ${txt(meta.logic_action)}`;
 
   // ---------- DAMAGE ----------
@@ -476,7 +485,6 @@ function resolveImmediateEffect(meta, ownerKey) {
     revealRandomEnemyTrap(foe);
   }
   if (/steal[s]?\s+1\s+defense\s+card/.test(etext)) {
-    // steal from foe hand first, otherwise from field
     if (!stealOneFromHand(foe, you, m => txt(m.type) === 'defense')) {
       const f = duelState.players[foe].field || [];
       const idx = f.findIndex(e => txt(getMeta(e.cardId)?.type) === 'defense');
@@ -502,7 +510,6 @@ function resolveImmediateEffect(meta, ownerKey) {
 
   // ---------- SPECIAL LOOT EFFECTS ----------
   if (/select\s+1\s+loot\s+card.*destroy.*heal\s+15/.test(etext)) {
-    // Cooking Pot: destroy one loot in hand to heal 15
     const P = duelState.players[you];
     const idx = P.hand.findIndex(e => txt(getMeta(e.cardId)?.type) === 'loot');
     if (idx >= 0) {
@@ -512,7 +519,6 @@ function resolveImmediateEffect(meta, ownerKey) {
     }
   }
   if (/return.*gun.*discard.*draw\s+pile|refresh.*weapon.*discard/.test(etext)) {
-    // Gun/Weapon Cleaning Kit
     moveOneFromDiscardToDeckTop(you, m => hasTag(m, 'gun') || txt(m.type) === 'attack');
   }
   if (/recharge.*tactical.*discard/.test(etext)) {
@@ -534,7 +540,6 @@ function resolveImmediateEffect(meta, ownerKey) {
       duelState.players[foe].buffs.skipNextTurn = true;
     }
     if (/spawn.*another.*infected|backup/.test(etext)) {
-      // Try hand → deck → discard
       const trySpawn = (from, takeFn) => {
         const pool = from
           .map((e,i)=>({e,i,m:getMeta(typeof e==='object'?e.cardId:e)}))
@@ -571,11 +576,6 @@ function resolveImmediateEffect(meta, ownerKey) {
 }
 
 /* ---------- BOT/REMOTE PLAY RESOLVER (important) ---------- */
-/**
- * Scan a player's field for cards that haven't been resolved on this client
- * (i.e., were placed by the bot/backend) and resolve them once.
- * This lets player2 plays trigger player1 traps on the UI.
- */
 function resolveUnresolvedNonTrapsOnceFor(ownerKey) {
   const P = duelState.players?.[ownerKey];
   if (!P) return;
@@ -587,7 +587,7 @@ function resolveUnresolvedNonTrapsOnceFor(ownerKey) {
     if (!meta || isTrapMeta(meta)) continue; // traps don't resolve here
     console.log('[auto-resolve]', { owner: ownerKey, cardId: card.cardId, name: meta?.name });
 
-    // 1) Resolve the attacker/infected card first
+    // 1) Resolve attacker/infected first
     resolveImmediateEffect(meta, ownerKey);
     card._resolvedByUI = true;
 
@@ -600,11 +600,36 @@ function resolveUnresolvedNonTrapsOnceFor(ownerKey) {
   }
 }
 
-/** Wrap the renderer so we always apply any bot plays after render. */
+/* ---------- Turn-edge audio cue helper ---------- */
+function _maybePlayTurnEndHit(prevActive) {
+  if (!prevActive) return;
+  // if the defender (the player who was NOT active) took damage during prevActive's turn, play the hit now
+  try {
+    duelState._tookDamageThisTurn ||= { player1: false, player2: false };
+    const defender = prevActive === 'player1' ? 'player2' : 'player1';
+    if (duelState._tookDamageThisTurn[defender]) {
+      audio.play('attack_hit.mp3');
+    }
+  } catch {}
+  // reset flags for the new turn window
+  duelState._tookDamageThisTurn = { player1: false, player2: false };
+}
+
+/** Wrap the renderer so we always apply any bot plays after render, and detect turn boundaries */
 function renderDuelUI() {
+  const prevActive = duelState._lastActivePlayer || null;
+  const curActive  = duelState.currentPlayer || null;
+
+  // If turn just changed (human OR bot), fire the end-of-turn hit cue for the player who just attacked
+  if (prevActive && curActive && prevActive !== curActive) {
+    _maybePlayTurnEndHit(prevActive);
+  }
+
   _renderDuelUI();
-  // process remote/bot plays that appeared in state
   resolveUnresolvedNonTrapsOnceFor('player2');
+
+  // track current active for next boundary check
+  duelState._lastActivePlayer = duelState.currentPlayer || null;
 }
 
 /** Safety net: poll in case updates arrive between our own renders. */
@@ -617,20 +642,13 @@ setInterval(() => {
 }, 250);
 
 /* ---------- start-of-turn auto draw (once per turn) ---------- */
-
-/**
- * Draw exactly once at the start of the active player's turn and apply
- * per-turn start effects. Idempotent within a turn using a simple flag.
- * Returns true if a draw/updates happened this call; false if already done.
- */
 export function startTurnIfNeeded() {
   const active = duelState.currentPlayer;
   if (!active) return false;
 
   // Flag bucket: which player already consumed their start-of-turn this cycle
   duelState._startDrawDoneFor ||= { player1: false, player2: false };
-  // (defensive) ensure the end-of-turn hit tracker exists
-  duelState._tookHitDueToCardThisTurn ||= { player1: false, player2: false };
+  duelState._damageHitPlayedForTurn ||= { player1: false, player2: false }; // compatibility guard
 
   if (duelState._startDrawDoneFor[active]) return false; // already handled
 
@@ -670,14 +688,11 @@ export function startTurnIfNeeded() {
 }
 
 /* ---------- end-of-turn cleanup ---------- */
-
 function cleanupEndOfTurn(playerKey) {
   const P = duelState.players[playerKey];
   ensureZones(P);
   if (!Array.isArray(P.field) || !P.field.length) return;
 
-  // Keep traps that have NOT fired (still set). Discard traps that fired.
-  // Keep defenses (and any persistent/equip/gear/armor). Discard ephemerals.
   const keep = [];
   const toss = [];
   for (const card of P.field) {
@@ -751,7 +766,6 @@ export function playCard(cardIndex) {
   player.field.push(card);
 
   if (trap) {
-    // Traps never auto-trigger on play; they wait for enemy Attack/Infected.
     console.log(`🪤 Set trap: ${meta?.name ?? card.cardId} (face-down)`);
     triggerAnimation('trap');
     renderDuelUI();
@@ -813,15 +827,7 @@ export async function endTurn() {
     // Discard ephemerals + fired traps at end of THIS player's turn
     cleanupEndOfTurn(ending);
 
-    // 🔊 play exactly once at end of THIS player's turn if THEY took damage from an opponent's card
-    try {
-      duelState._tookHitDueToCardThisTurn ||= { player1: false, player2: false };
-      if (duelState._tookHitDueToCardThisTurn[ending]) {
-        await audio.play('attack_hit.mp3', { channel: 'default', policy: 'queue' });
-      }
-      // reset per-turn damage flags for the next turn
-      duelState._tookHitDueToCardThisTurn = { player1: false, player2: false };
-    } catch {}
+    // NOTE: we no longer play attack_hit here; it's handled on the real turn edge in renderDuelUI()
 
     // Now pass the turn
     const next = ending === 'player1' ? 'player2' : 'player1';
@@ -829,6 +835,9 @@ export async function endTurn() {
 
     // Reset start-of-turn flags so the new active can draw once
     duelState._startDrawDoneFor = { player1: false, player2: false };
+
+    // Reset once-per-turn SFX guard on turn change (compat)
+    duelState._damageHitPlayedForTurn = { player1: false, player2: false };
 
     // Handle skip for the NEW active player
     const A = duelState.players[next];
@@ -844,8 +853,9 @@ export async function endTurn() {
       const back = next === 'player1' ? 'player2' : 'player1';
       duelState.currentPlayer = back;
 
-      // Reset flags again for the now-active player and start their turn
+      // Reset flags again for the now-active player
       duelState._startDrawDoneFor = { player1: false, player2: false };
+      duelState._damageHitPlayedForTurn = { player1: false, player2: false };
 
       startTurnIfNeeded();
 
