@@ -65,24 +65,12 @@ function ensureZones(p) {
   p.buffs       ||= {}; // generic bag: { extraDrawPerTurn, blockHealTurns, skipNextTurn, skipNextDraw, nextAttackBonus, nextAttackMult, ... }
 }
 
-/* ---------- SFX guards to avoid duplicate hit sounds ---------- */
-let _lastDamageSfxAt = 0;
-function _playGenericHitOnce() {
-  const now = Date.now();
-  if (duelState._suppressGenericHit) return; // card-specific SFX active
-  if (now - _lastDamageSfxAt < 250) return;  // throttle bursty sequences
-  _lastDamageSfxAt = now;
-  try { audio.play('attack_hit.mp3'); } catch {}
-}
-
-// Once-per-turn per-defender guard for generic hit SFX
-function _playHitOncePerTurnFor(defenderKey) {
-  duelState._damageHitPlayedForTurn ||= { player1: false, player2: false };
-  if (duelState._suppressGenericHit) return;
-  if (duelState._damageHitPlayedForTurn[defenderKey]) return;
-  duelState._damageHitPlayedForTurn[defenderKey] = true;
-  try { audio.play('attack_hit.mp3'); } catch {}
-}
+/* ---------- SFX NOTE ----------
+   We now reserve attack_hit.mp3 exclusively for a single,
+   end-of-turn confirmation if (and only if) the ending player
+   took damage from an opponent's card during that turn.
+   No generic damage SFX fires from changeHP anymore.
+---------------------------------*/
 
 /** HP adjust with clamping (0–MAX_HP), obeying block-heal */
 function changeHP(playerKey, delta) {
@@ -93,12 +81,6 @@ function changeHP(playerKey, delta) {
   if (delta > 0 && p.buffs?.blockHealTurns > 0) {
     console.log(`[heal-block] Healing prevented on ${playerKey} (${delta} HP).`);
     return;
-  }
-
-  // 🔊 generic hit SFX, but only once per defender per turn
-  if (delta < 0) {
-    duelState._tookDamageThisTurn ||= { player1: false, player2: false };
-    duelState._tookDamageThisTurn[playerKey] = true;
   }
 
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
@@ -224,6 +206,11 @@ function parseNumberPairTimes(s) {
 function damageFoe(foe, you, meta, base) {
   const amount = consumeAttackBuff(you, meta, base);
   changeHP(foe, -amount);
+
+  // mark that the defender took damage from a *card* this turn
+  duelState._tookHitDueToCardThisTurn ||= { player1: false, player2: false };
+  duelState._tookHitDueToCardThisTurn[foe] = true;
+
   console.log(`⚔️ ${meta.name}: dealt ${amount} DMG to ${foe}`);
   triggerAnimation('bullet');
 }
@@ -642,8 +629,8 @@ export function startTurnIfNeeded() {
 
   // Flag bucket: which player already consumed their start-of-turn this cycle
   duelState._startDrawDoneFor ||= { player1: false, player2: false };
-  // Ensure SFX-once-per-turn guard exists for this new cycle (defensive)
-  duelState._damageHitPlayedForTurn ||= { player1: false, player2: false };
+  // (defensive) ensure the end-of-turn hit tracker exists
+  duelState._tookHitDueToCardThisTurn ||= { player1: false, player2: false };
 
   if (duelState._startDrawDoneFor[active]) return false; // already handled
 
@@ -826,15 +813,14 @@ export async function endTurn() {
     // Discard ephemerals + fired traps at end of THIS player's turn
     cleanupEndOfTurn(ending);
 
-    // 🔊 play exactly once at end of THIS player's turn if their opponent took damage
+    // 🔊 play exactly once at end of THIS player's turn if THEY took damage from an opponent's card
     try {
-      duelState._tookDamageThisTurn ||= { player1: false, player2: false };
-      const foe = ending === 'player1' ? 'player2' : 'player1';
-      if (duelState._tookDamageThisTurn[foe]) {
-        audio.play('attack_hit.mp3');
+      duelState._tookHitDueToCardThisTurn ||= { player1: false, player2: false };
+      if (duelState._tookHitDueToCardThisTurn[ending]) {
+        await audio.play('attack_hit.mp3', { channel: 'default', policy: 'queue' });
       }
       // reset per-turn damage flags for the next turn
-      duelState._tookDamageThisTurn = { player1: false, player2: false };
+      duelState._tookHitDueToCardThisTurn = { player1: false, player2: false };
     } catch {}
 
     // Now pass the turn
@@ -843,9 +829,6 @@ export async function endTurn() {
 
     // Reset start-of-turn flags so the new active can draw once
     duelState._startDrawDoneFor = { player1: false, player2: false };
-
-    // Reset once-per-turn SFX guard on turn change
-    duelState._damageHitPlayedForTurn = { player1: false, player2: false };
 
     // Handle skip for the NEW active player
     const A = duelState.players[next];
@@ -863,8 +846,6 @@ export async function endTurn() {
 
       // Reset flags again for the now-active player and start their turn
       duelState._startDrawDoneFor = { player1: false, player2: false };
-      // Also reset SFX guard at this second handoff
-      duelState._damageHitPlayedForTurn = { player1: false, player2: false };
 
       startTurnIfNeeded();
 
