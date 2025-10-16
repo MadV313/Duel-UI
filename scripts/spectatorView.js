@@ -5,7 +5,33 @@ import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 import allCards from './allCards.js';
 
-// quick lookup by "003" id
+/* ---------------- token / url helpers (added) ---------------- */
+const _qs = new URLSearchParams(location.search);
+const PLAYER_TOKEN =
+  _qs.get('token') ||
+  (() => { try { return localStorage.getItem('sv13.token') || ''; } catch { return ''; } })();
+
+try { if (PLAYER_TOKEN) localStorage.setItem('sv13.token', PLAYER_TOKEN); } catch {}
+
+const API_OVERRIDE = _qs.get('api') || '';
+
+/** Append token/api to a given URL string safely. */
+function withTokenAndApi(url) {
+  try {
+    const u = new URL(url, location.origin);
+    if (PLAYER_TOKEN) u.searchParams.set('token', PLAYER_TOKEN);
+    if (API_OVERRIDE) u.searchParams.set('api', API_OVERRIDE.replace(/\/+$/, ''));
+    return u.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    const parts = [];
+    if (PLAYER_TOKEN) parts.push(`token=${encodeURIComponent(PLAYER_TOKEN)}`);
+    if (API_OVERRIDE) parts.push(`api=${encodeURIComponent(API_OVERRIDE.replace(/\/+$/, ''))}`);
+    return parts.length ? `${url}${sep}${parts.join('&')}` : url;
+  }
+}
+
+/* ---------------- quick lookup by "003" id ---------------- */
 const CARD_INDEX = Object.fromEntries(
   allCards.map(c => [String(c.card_id).padStart(3, '0'), c])
 );
@@ -45,6 +71,14 @@ export function renderSpectatorView() {
     const w = document.getElementById('winner-message');
     if (w) w.textContent = `${duelState.winner} wins the duel!`;
   }
+
+  // Ensure the "Return to Hub" link preserves token/api for proper navigation back
+  try {
+    const hubLink = document.querySelector('.return-to-hub');
+    if (hubLink && hubLink.href) {
+      hubLink.href = withTokenAndApi(hubLink.href);
+    }
+  } catch {}
 
   // Light-weight visual cues based on cards on the field
   renderSpectatorAnimations();
