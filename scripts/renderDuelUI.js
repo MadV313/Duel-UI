@@ -15,6 +15,40 @@ const SLOW_MO_MS = 1000;     // each step ~1.0s
 const MIN_TURN_MS = 7500;    // min visible bot turn ~7.5s
 const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
 
+/* ---------------- token / url helpers (NEW) ---------------- */
+const _qs = new URLSearchParams(location.search);
+const PLAYER_TOKEN =
+  _qs.get('token') ||
+  (() => { try { return localStorage.getItem('sv13.token') || ''; } catch { return ''; } })();
+
+try { if (PLAYER_TOKEN) localStorage.setItem('sv13.token', PLAYER_TOKEN); } catch {}
+
+const API_OVERRIDE = _qs.get('api') || '';
+
+/** Append token/api to a given URL string safely. */
+function withTokenAndApi(url) {
+  try {
+    const u = new URL(url, location.origin);
+    if (PLAYER_TOKEN) u.searchParams.set('token', PLAYER_TOKEN);
+    if (API_OVERRIDE) u.searchParams.set('api', API_OVERRIDE.replace(/\/+$/, ''));
+    return u.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    const parts = [];
+    if (PLAYER_TOKEN) parts.push(`token=${encodeURIComponent(PLAYER_TOKEN)}`);
+    if (API_OVERRIDE) parts.push(`api=${encodeURIComponent(API_OVERRIDE.replace(/\/+$/, ''))}`);
+    return parts.length ? `${url}${sep}${parts.join('&')}` : url;
+  }
+}
+
+/** Build standard headers including token for API requests. */
+function authHeaders(extra = {}) {
+  return {
+    ...(PLAYER_TOKEN ? { 'X-Player-Token': PLAYER_TOKEN } : {}),
+    ...extra,
+  };
+}
+
 /* ---------------- allCards loader ---------------- */
 let allCards = [];
 let allCardsReady = false;
@@ -668,7 +702,7 @@ async function resolveImmediateEffect(meta, ownerKey) {
 
   // 🔊 per-card resolve SFX — set temporary suppression for generic hit SFX, then play.
   try {
-    suppressGenericHit(300); // <<< key line: prevents generic hit SFX from overlapping this resolve SFX
+    suppressGenericHit(300);
     await audio.playForCard(meta, 'resolve', { channel: 'combat' });
   } catch {}
   await wait(90);
@@ -992,14 +1026,14 @@ function mergeServerIntoUI(server) {
 async function postBotTurn(payload) {
   let res = await fetch(`${API_BASE}/bot/turn`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   });
 
   if (res.status === 404 || res.status === 405) {
     res = await fetch(`${API_BASE}/duel/turn`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
   }
@@ -1255,11 +1289,11 @@ function showWinnerOverlay() {
   const playAgain = document.createElement('button');
   playAgain.textContent = 'Play Again';
   playAgain.style.cssText = 'padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#16202a; color:#e6e6e6; cursor:pointer;';
-  playAgain.onclick = () => { window.location.href = `${UI_BASE}/?mode=practice`; };
+  playAgain.onclick = () => { window.location.href = withTokenAndApi(`${UI_BASE}/?mode=practice`); };
 
   const toHub = document.createElement('a');
   toHub.textContent = 'Return to Hub';
-  toHub.href = `${UI_BASE}/`;
+  toHub.href = withTokenAndApi(`${UI_BASE}/`);
   toHub.style.cssText = 'padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#0d141a; color:#e6e6e6; text-decoration:none;';
 
   const copyBtn = document.createElement('button');
@@ -1319,7 +1353,7 @@ export async function renderDuelUI() {
     bgSrc: '/audio/bg/Follow the Trail.mp3',
     sfxBase: '/audio/sfx/',
   });
-  audio.setDebug(true);           // <<< enable audio debug logs
+  audio.setDebug(true);
   audio.initAutoplayUnlock();
   installSoundToggleUI();
 
@@ -1365,7 +1399,7 @@ export async function renderDuelUI() {
       const summary = buildSummary();
       fetch(`${API_BASE}/summary/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(summary),
       }).catch(err => console.error('[UI] Summary save failed:', err));
     }
