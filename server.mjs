@@ -103,8 +103,19 @@ async function chooseTarget() {
   }, 20000);
 })();
 
+// ---- Minimal CORS for dev/local (safe for static site + proxy)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // ---- Health & debug
 app.get('/health', (_req, res) => res.type('text/plain').send('ok'));
+app.head('/health', (_req, res) => res.status(200).end());
 app.get('/__whoami', (_req, res) => res.json({ currentTarget: CURRENT_TARGET, candidates: CANDIDATES }));
 app.get('/__ping', async (_req, res) => {
   const ok = await canReach(CURRENT_TARGET);
@@ -128,17 +139,23 @@ app.use(
   createProxyMiddleware({
     changeOrigin: true,
     xfwd: true,
-    // honor CURRENT_TARGET dynamically
-    router: () => CURRENT_TARGET,
+    router: () => CURRENT_TARGET,            // honor CURRENT_TARGET dynamically
     pathRewrite: { '^/api': '' },
     proxyTimeout: 10000,
     timeout: 10000,
     onProxyReq: (proxyReq, req) => {
-      log('proxy', { method: req.method, url: req.url, target: CURRENT_TARGET });
+      log('proxy →', { method: req.method, url: req.url, target: CURRENT_TARGET });
+      // Hint: add any extra headers here if your backend needs them
+      // proxyReq.setHeader('X-UI-Origin', 'duel-ui');
+    },
+    onProxyRes: (proxyRes, req) => {
+      log('proxy ←', { status: proxyRes.statusCode, url: req.url });
     },
     onError: (err, _req, res) => {
       log('proxy error:', err?.message || err);
-      res.status(502).json({ error: 'Bad gateway (UI→API proxy failed)', detail: String(err?.message || err) });
+      res
+        .status(502)
+        .json({ error: 'Bad gateway (UI→API proxy failed)', detail: String(err?.message || err), target: CURRENT_TARGET });
     },
   })
 );
