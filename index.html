@@ -5,17 +5,31 @@
   <title>DayZ CCG Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
 
-  <!-- ✅ Make API_BASE available to every script (before modules) -->
+  <!-- ✅ Global bootstrap: expose token/api/mode/imgbase to all scripts -->
   <script>
-    // Prefer the UI proxy (/api). Allow ?api=... override for local/dev.
-    window.API_BASE = new URLSearchParams(location.search).get('api') || '/api';
-    console.log('[UI] API_BASE =', window.API_BASE);
+    (function () {
+      const qs = new URLSearchParams(location.search);
+
+      // Prefer the UI proxy (/api). Allow ?api=... override for local/dev.
+      const API = (qs.get('api') || '/api').replace(/\/+$/, '');
+      const TOKEN = qs.get('token') || '';
+      const MODE = (qs.get('mode') || '').toLowerCase();
+      const IMG_BASE = (qs.get('imgbase') || '').replace(/\/+$/, '');
+
+      // Export to window for all ES modules / inline handlers
+      window.API_BASE = API;
+      window.USER_TOKEN = TOKEN;
+      window.DUEL_MODE = MODE;
+      window.IMG_BASE = IMG_BASE;
+
+      console.log('[UI] API_BASE =', API, 'TOKEN set?', !!TOKEN, 'MODE =', MODE, 'IMG_BASE =', IMG_BASE || '(default in renderers)');
+    })();
   </script>
 
   <!-- Duel Loader (for Discord-initiated PvP matches) -->
   <script type="module" src="scripts/duelLoader.js" defer></script>
 
-  <!-- Script Modules (these now see window.API_BASE) -->
+  <!-- Script Modules (these now see window.API_BASE, window.USER_TOKEN, window.IMG_BASE) -->
   <script type="module" src="/scripts/api-base.js"></script>
   <script type="module" src="/scripts/fetch-shim.js"></script>
   <script type="module" src="scripts/config.js" defer></script>
@@ -81,7 +95,7 @@
     <div id="player1-discard-counter" class="discard-counter">Discard: 0</div>
   </div>
 
-  <a href="https://madv313.github.io/HUB-UI/" class="return-to-hub">← Return to Hub</a>
+  <a href="https://madv313.github.io/HUB-UI/" class="return-to-hub" id="returnToHub">← Return to Hub</a>
 
   <!-- Inline Script Bindings -->
   <script type="module">
@@ -111,10 +125,34 @@
       if (turn) { turn.classList.add('hidden'); }
     }
 
+    function rewriteReturnToHub() {
+      const a = $('returnToHub');
+      if (!a) return;
+
+      try {
+        const u = new URL(a.href);
+        if (window.USER_TOKEN) u.searchParams.set('token', window.USER_TOKEN);
+        if (window.API_BASE)   u.searchParams.set('api', window.API_BASE);
+        if (window.IMG_BASE)   u.searchParams.set('imgbase', window.IMG_BASE);
+        a.href = u.toString();
+      } catch {
+        // Fallback if relative href is ever used
+        let base = a.getAttribute('href') || 'https://madv313.github.io/HUB-UI/';
+        const parts = [];
+        if (window.USER_TOKEN) parts.push(`token=${encodeURIComponent(window.USER_TOKEN)}`);
+        if (window.API_BASE)   parts.push(`api=${encodeURIComponent(window.API_BASE)}`);
+        if (window.IMG_BASE)   parts.push(`imgbase=${encodeURIComponent(window.IMG_BASE)}`);
+        const sep = base.includes('?') ? '&' : '?';
+        if (parts.length) a.setAttribute('href', `${base}${sep}${parts.join('&')}`);
+      }
+    }
+
     function init() {
       const urlParams   = new URLSearchParams(window.location.search);
       const isSpectator = urlParams.get('spectator') === 'true';
       const isMock      = urlParams.get('mock') === 'true';
+
+      rewriteReturnToHub();
 
       if (isSpectator) {
         renderSpectatorView();
