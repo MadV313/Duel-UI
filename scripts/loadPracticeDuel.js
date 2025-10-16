@@ -16,6 +16,14 @@ function setDuelReady(flag) { try { document.body.classList.toggle('duel-ready',
 
 const MAX_HP = 200;
 
+/* ---------- token discovery & persistence (new) ---------- */
+let PLAYER_TOKEN = '';
+try {
+  const qs = new URLSearchParams(location.search);
+  PLAYER_TOKEN = qs.get('token') || localStorage.getItem('sv13.token') || '';
+  if (PLAYER_TOKEN) localStorage.setItem('sv13.token', PLAYER_TOKEN);
+} catch { /* ignore */ }
+
 /* ---------- tiny normalizers (mirror renderDuelUI) ---------- */
 const pad3 = id => String(id).padStart(3, '0');
 
@@ -103,7 +111,11 @@ export async function loadPracticeDuel() {
   try {
     const url = `${API_BASE}/bot/practice`;
     console.log('[practice] fetch →', url);
-    const res = await fetch(url, { method: 'GET' });
+
+    // Attach token header if we have it (fetch-shim also does this, but we add here defensively)
+    const headers = PLAYER_TOKEN ? { 'X-Player-Token': PLAYER_TOKEN } : undefined;
+
+    const res = await fetch(url, { method: 'GET', headers });
     if (!res.ok) throw new Error(`Backend not available (${res.status})`);
     data = await res.json();
     console.log('✅ Loaded practice data from backend:', data);
