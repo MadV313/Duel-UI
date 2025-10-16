@@ -1,14 +1,60 @@
 // scripts/duelLoader.js
 // Auto-start loader for duels launched from Discord links (PvP or Practice)
+// Now also carries the invoking player's ?token= (and ?api=, ?imgbase=) so the user
+// can navigate back to Hub/other UIs with their identity intact.
 
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
-import { apiUrl } from './config.js';
+import { apiUrl } from './api-base.js';
 
 const qs = new URLSearchParams(location.search);
-const mode       = qs.get('mode');          // e.g. "practice"
+
+// Core params
+const mode       = qs.get('mode');                 // e.g. "practice"
 const player1Id  = qs.get('player1');
 const player2Id  = qs.get('player2') || 'bot';
+
+// Identity / routing params
+const TOKEN   = qs.get('token') || '';
+const API_QS  = (qs.get('api') || '').replace(/\/+$/, '');     // may be blank (UI proxy default)
+const IMGB    = (qs.get('imgbase') || '').replace(/\/+$/, ''); // optional image base
+
+// Persist identity so other modules can access it (and for future reloads)
+try {
+  if (TOKEN) localStorage.setItem('sv13.token', TOKEN);
+  if (API_QS) localStorage.setItem('sv13.api', API_QS);
+  if (IMGB) localStorage.setItem('sv13.imgbase', IMGB);
+  // also expose at runtime
+  window.SV13 = Object.assign(window.SV13 || {}, { token: TOKEN, api: API_QS, imgbase: IMGB });
+} catch { /* ignore */ }
+
+// Ensure “Return to Hub” (and any other outbound links we add later) keep token/api/imgbase
+(function wireOutboundLinks() {
+  const withParams = (href) => {
+    try {
+      const u = new URL(href, location.href);
+      if (TOKEN) u.searchParams.set('token', TOKEN);
+      if (API_QS) u.searchParams.set('api', API_QS);
+      if (IMGB) u.searchParams.set('imgbase', IMGB);
+      u.searchParams.set('ts', String(Date.now())); // cache-bust
+      return u.toString();
+    } catch {
+      // relative fallback
+      const parts = [];
+      if (TOKEN) parts.push(`token=${encodeURIComponent(TOKEN)}`);
+      if (API_QS) parts.push(`api=${encodeURIComponent(API_QS)}`);
+      if (IMGB) parts.push(`imgbase=${encodeURIComponent(IMGB)}`);
+      parts.push(`ts=${Date.now()}`);
+      const sep = href.includes('?') ? '&' : '?';
+      return parts.length ? `${href}${sep}${parts.join('&')}` : href;
+    }
+  };
+
+  // Known anchor(s)
+  document.querySelectorAll('a.return-to-hub').forEach(a => {
+    a.href = withParams(a.getAttribute('href') || 'https://madv313.github.io/HUB-UI/');
+  });
+})();
 
 // Normalize server payload into the shape our UI expects
 function normalizeServerState(data) {
@@ -46,21 +92,19 @@ function normalizeServerState(data) {
 }
 
 async function loadPractice() {
+  // If your backend scopes state by token, optionally include it as a header.
+  // This is harmless if unused by the server.
+  const headers = {};
+  if (TOKEN) headers['X-Player-Token'] = TOKEN;
+
   // Try to read existing state first (Discord command already initialized it)
-  let res = await fetch(apiUrl('/duel/state')).catch(() => null);
+  let res = await fetch(apiUrl('/duel/state'), { headers }).catch(() => null);
 
-  // If the state isn't available, you can optionally try to initialize here
+  // If the state isn't available, we intentionally do NOT auto-initialize here.
+  // Practice should be started by the Discord command to keep flows consistent.
   if (!res || !res.ok) {
-    // Optional: start a new practice duel from the UI if none exists
-    // (Left commented to keep Discord as the initializer)
-/*
-    await fetch(apiUrl('/duel/practice')).catch(() => null);
-    res = await fetch(apiUrl('/duel/state')).catch(() => null);
-*/
-  }
-
-  if (!res || !res.ok) {
-    console.error('❌ Practice load failed:', res && (await res.text()).slice(0, 200));
+    const peek = res && (await res.text().catch(() => '')) || '';
+    console.error('❌ Practice load failed:', peek.slice(0, 200));
     return;
   }
 
@@ -78,10 +122,14 @@ async function loadPractice() {
 }
 
 async function loadPvp(p1, p2) {
+  // Optionally include requester token for auditing/ownership (server may ignore)
+  const body = { player1Id: p1, player2Id: p2 };
+  if (TOKEN) body.requesterToken = TOKEN;
+
   const res = await fetch(apiUrl('/duel/start'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ player1Id: p1, player2Id: p2 })
+    headers: { 'Content-Type': 'application/json', ...(TOKEN ? { 'X-Player-Token': TOKEN } : {}) },
+    body: JSON.stringify(body)
   }).catch(() => null);
 
   if (!res || !res.ok) {
