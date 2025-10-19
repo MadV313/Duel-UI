@@ -15,7 +15,7 @@ const SLOW_MO_MS = 1000;     // each step ~1.0s
 const MIN_TURN_MS = 7500;    // min visible bot turn ~7.5s
 const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
 
-/* ---------------- token / url helpers (NEW) ---------------- */
+/* ---------------- small utils ---------------- */
 const _qs = new URLSearchParams(location.search);
 const PLAYER_TOKEN =
   _qs.get('token') ||
@@ -23,14 +23,16 @@ const PLAYER_TOKEN =
 
 try { if (PLAYER_TOKEN) localStorage.setItem('sv13.token', PLAYER_TOKEN); } catch {}
 
-const API_OVERRIDE = _qs.get('api') || '';
+const API_OVERRIDE = (_qs.get('api') || '').replace(/\/+$/, '');
+const HUB_BASE = _qs.get('hub') || (typeof window !== 'undefined' && window.HUB_UI_URL) || 'https://madv313.github.io/HUB-UI';
 
 /** Append token/api to a given URL string safely. */
 function withTokenAndApi(url) {
   try {
     const u = new URL(url, location.origin);
     if (PLAYER_TOKEN) u.searchParams.set('token', PLAYER_TOKEN);
-    if (API_OVERRIDE) u.searchParams.set('api', API_OVERRIDE.replace(/\/+$/, ''));
+    if (API_OVERRIDE) u.searchParams.set('api', API_OVERRIDE);
+    u.searchParams.set('ts', String(Date.now())); // optional
     return u.toString();
   } catch {
     const sep = url.includes('?') ? '&' : '?';
@@ -1293,7 +1295,7 @@ function showWinnerOverlay() {
 
   const toHub = document.createElement('a');
   toHub.textContent = 'Return to Hub';
-  toHub.href = withTokenAndApi(`${UI_BASE}/`);
+  toHub.href = withTokenAndApi(`${HUB_BASE}/`);
   toHub.style.cssText = 'padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#0d141a; color:#e6e6e6; text-decoration:none;';
 
   const copyBtn = document.createElement('button');
@@ -1346,7 +1348,7 @@ function buildSummary() {
 }
 
 /* ------------------ main render ------------------ */
-export async function renderDuelUI() {
+export async function renderDuelUI(root) {
   await ensureAllCardsLoaded();
 
   audio.configure({
