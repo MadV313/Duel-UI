@@ -18,6 +18,7 @@ const player2Id  = qs.get('player2') || 'bot';
 const TOKEN   = qs.get('token') || '';
 const API_QS  = (qs.get('api') || '').replace(/\/+$/, '');     // may be blank (UI proxy default)
 const IMGB    = (qs.get('imgbase') || '').replace(/\/+$/, ''); // optional image base
+const HUB_QS  = (qs.get('hub') || '').trim();
 
 // Persist identity so other modules can access it (and for future reloads)
 try {
@@ -52,7 +53,8 @@ try {
 
   // Known anchor(s)
   document.querySelectorAll('a.return-to-hub').forEach(a => {
-    a.href = withParams(a.getAttribute('href') || 'https://madv313.github.io/HUB-UI/');
+    const base = HUB_QS || a.getAttribute('href') || 'https://madv313.github.io/HUB-UI/';
+    a.href = withParams(base);
   });
 })();
 
