@@ -10,9 +10,8 @@ const MAX_HP = 200;
 const MAX_FIELD_SLOTS = 3;
 const MAX_HAND = 4;
 
-// 🎬 pacing (slightly slower)
-const SLOW_MO_MS = 1000;     // each step ~1.0s
-const MIN_TURN_MS = 7500;    // min visible bot turn ~7.5s
+const SLOW_MO_MS = 1000;
+const MIN_TURN_MS = 7500;
 const wait = (ms = SLOW_MO_MS) => new Promise(r => setTimeout(r, ms));
 
 /* ---------------- small utils ---------------- */
@@ -20,30 +19,40 @@ const _qs = new URLSearchParams(location.search);
 const PLAYER_TOKEN =
   _qs.get('token') ||
   (() => { try { return localStorage.getItem('sv13.token') || ''; } catch { return ''; } })();
-
 try { if (PLAYER_TOKEN) localStorage.setItem('sv13.token', PLAYER_TOKEN); } catch {}
 
 const API_OVERRIDE = (_qs.get('api') || '').replace(/\/+$/, '');
 const HUB_BASE = _qs.get('hub') || (typeof window !== 'undefined' && window.HUB_UI_URL) || 'https://madv313.github.io/HUB-UI';
 
-/** Append token/api to a given URL string safely. */
+// Opponent token (multiplayer-ready; ignored for practice bot)
+const OPP_TOKEN =
+  _qs.get('token2') ||
+  _qs.get('opptoken') ||
+  _qs.get('opponentToken') ||
+  _qs.get('partnerToken') ||
+  '';
+
+// Duel/session id (optional; used for spectators polling if present)
+const DUEL_ID =
+  _qs.get('duelId') ||
+  _qs.get('duel') ||
+  _qs.get('session') ||
+  '';
+
 function withTokenAndApi(url) {
   try {
     const u = new URL(url, location.origin);
     if (PLAYER_TOKEN) u.searchParams.set('token', PLAYER_TOKEN);
     if (API_OVERRIDE) u.searchParams.set('api', API_OVERRIDE);
-    u.searchParams.set('ts', String(Date.now())); // optional
     return u.toString();
   } catch {
     const sep = url.includes('?') ? '&' : '?';
     const parts = [];
     if (PLAYER_TOKEN) parts.push(`token=${encodeURIComponent(PLAYER_TOKEN)}`);
-    if (API_OVERRIDE) parts.push(`api=${encodeURIComponent(API_OVERRIDE.replace(/\/+$/, ''))}`);
+    if (API_OVERRIDE) parts.push(`api=${encodeURIComponent(API_OVERRIDE)}`);
     return parts.length ? `${url}${sep}${parts.join('&')}` : url;
   }
 }
-
-/** Build standard headers including token for API requests. */
 function authHeaders(extra = {}) {
   return {
     ...(PLAYER_TOKEN ? { 'X-Player-Token': PLAYER_TOKEN } : {}),
@@ -94,7 +103,7 @@ async function ensureAllCardsLoaded() {
   await allCardsLoading;
 }
 
-/* ---------------- small helpers ---------------- */
+/* ---------------- meta helpers ---------------- */
 function pad3(id) { return String(id).padStart(3, '0'); }
 
 function getMeta(cardId) {
@@ -102,7 +111,6 @@ function getMeta(cardId) {
   const id = pad3(cardId);
   return allCards.find(c => c.card_id === id) || null;
 }
-
 function tagsOf(meta) {
   if (!meta) return [];
   return Array.isArray(meta.tags)
@@ -112,42 +120,33 @@ function tagsOf(meta) {
         .map(t => t.toLowerCase().trim())
         .filter(Boolean);
 }
-
 function hasTag(meta, ...tags) {
   if (!meta) return false;
   const set = new Set(tagsOf(meta));
   return tags.some(t => set.has(String(t).toLowerCase()));
 }
-
 function asInt(id) {
   const n = Number(String(id).replace(/\D/g, ''));
   return Number.isFinite(n) ? n : -1;
 }
-
-// Traps are #106–#120 in your master list (fallback when meta missing)
 function isTrapIdByRange(cardId) {
   const n = asInt(cardId);
   return n >= 106 && n <= 120;
 }
-
 function isTrap(cardId) {
   const m = getMeta(cardId);
   const t = String(m?.type || '').toLowerCase();
   const name = String(m?.name || '').toLowerCase();
-
   if (t === 'trap') return true;
   if (hasTag(m, 'trap')) return true;
   if (/\btrap\b/.test(name)) return true;
-
   return isTrapIdByRange(cardId);
 }
-
 function looksInfected(meta) {
   if (!meta) return false;
   if (hasTag(meta, 'infected')) return true;
   return /infected/i.test(String(meta.name || ''));
 }
-
 function ensureArrays(p) {
   p.hand ||= [];
   p.field ||= [];
@@ -155,26 +154,69 @@ function ensureArrays(p) {
   p.discardPile ||= [];
   p.buffs ||= {};
 }
-
 function changeHP(playerKey, delta) {
   const p = duelState?.players?.[playerKey];
   if (!p) return;
   p.hp = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
 }
 
+/* ---------------- names via tokens ---------------- */
+let fetchedNames = { player1: '', player2: '' };
+
+async function fetchNameForToken(token) {
+  if (!token) return '';
+  const base = API_OVERRIDE || API_BASE;
+  if (!base) return '';
+  try {
+    const r = await fetch(`${base}/me/${encodeURIComponent(token)}/stats`, { cache: 'no-store' });
+    if (!r.ok) return '';
+    const s = await r.json();
+    return (s.discordName || s.name || '').trim();
+  } catch { return ''; }
+}
+
+async function initPlayerNames() {
+  // Only query if we don't already have names
+  const p1Existing = duelState?.players?.player1?.discordName || duelState?.players?.player1?.name || '';
+  const p2Existing = duelState?.players?.player2?.discordName || duelState?.players?.player2?.name || '';
+
+  const [n1, n2] = await Promise.all([
+    p1Existing ? Promise.resolve(p1Existing) : fetchNameForToken(PLAYER_TOKEN),
+    p2Existing ? Promise.resolve(p2Existing) : (OPP_TOKEN ? fetchNameForToken(OPP_TOKEN) : Promise.resolve('')),
+  ]);
+
+  fetchedNames.player1 = n1 || fetchedNames.player1 || '';
+  fetchedNames.player2 = n2 || fetchedNames.player2 || '';
+
+  try {
+    duelState.players ||= {};
+    duelState.players.player1 ||= {};
+    duelState.players.player2 ||= {};
+    if (fetchedNames.player1) {
+      duelState.players.player1.discordName = fetchedNames.player1;
+      duelState.players.player1.name = fetchedNames.player1;
+    }
+    if (fetchedNames.player2) {
+      duelState.players.player2.discordName = fetchedNames.player2;
+      duelState.players.player2.name = fetchedNames.player2;
+    } else if (!OPP_TOKEN) {
+      // practice bot
+      duelState.players.player2.discordName ||= 'Practice Bot';
+      duelState.players.player2.name ||= 'Practice Bot';
+    }
+  } catch {}
+}
+
 /* ---------- SFX compatibility: trap fire ---------- */
-/** Prefer audio.playTrapSfx if the audio module exposes it; otherwise fall back. */
 function playTrapSfx(trapMetaOrCard) {
   const meta = trapMetaOrCard?.cardId ? getMeta(trapMetaOrCard.cardId) : trapMetaOrCard;
   try {
-    if (typeof audio.playTrapSfx === 'function') {
-      return audio.playTrapSfx(meta);
-    }
+    if (typeof audio.playTrapSfx === 'function') return audio.playTrapSfx(meta);
   } catch {}
   return audio.playForCard(meta, 'fire');
 }
 
-/* ---------- Human “place” SFX detector (player1 only) ---------- */
+/* ---------- Human “place” SFX detector ---------- */
 const _lastFieldCounts = { player1: new Map() };
 const _firstSeenField = { player1: true };
 
@@ -187,32 +229,24 @@ function countByCardId(list) {
   });
   return m;
 }
-
-/** Plays 'place' SFX for newly added cards to player1's field. */
 function playPlaceSfxForNewFieldCards(playerKey = 'player1') {
   const P = duelState?.players?.[playerKey];
   if (!P) return;
   const curr = countByCardId(P.field);
   const prev = _lastFieldCounts[playerKey] || new Map();
-
-  // skip noise on first render
   if (_firstSeenField[playerKey]) {
     _firstSeenField[playerKey] = false;
     _lastFieldCounts[playerKey] = curr;
     return;
   }
-
-  // compute positive deltas (new placements)
   for (const [id, now] of curr.entries()) {
     const was = prev.get(id) || 0;
     const delta = now - was;
     if (delta > 0) {
       const meta = getMeta(id);
-      // fire-and-forget is fine here to keep UI snappy
-      audio.playForCard(meta, 'place'); // trap_set or card_place based on meta/type
+      audio.playForCard(meta, 'place');
     }
   }
-
   _lastFieldCounts[playerKey] = curr;
 }
 
@@ -221,12 +255,10 @@ function outOfCards(playerKey) {
   try {
     const P = duelState?.players?.[playerKey];
     if (!P) return false;
-    // “No remaining plays”: no hand and no deck (field/traps don’t count as playable-from-hand)
     return (Array.isArray(P.hand) ? P.hand.length : 0) === 0 &&
            (Array.isArray(P.deck) ? P.deck.length : 0) === 0;
   } catch { return false; }
 }
-
 function detectWinner() {
   try {
     if (duelState.winner) return duelState.winner;
@@ -234,21 +266,19 @@ function detectWinner() {
     const p1 = Number(duelState?.players?.player1?.hp ?? MAX_HP);
     const p2 = Number(duelState?.players?.player2?.hp ?? MAX_HP);
 
-    // 1) HP checks
     if (p1 <= 0 && p2 <= 0) {
-      duelState.winner = 'player1'; // tie-breaker
+      duelState.winner = 'player1';
     } else if (p1 <= 0) {
       duelState.winner = 'player2';
     } else if (p2 <= 0) {
       duelState.winner = 'player1';
     }
 
-    // 2) Out-of-cards checks (only if no HP winner yet)
     if (!duelState.winner) {
       const p1Out = outOfCards('player1');
       const p2Out = outOfCards('player2');
       if (p1Out && p2Out) {
-        duelState.winner = 'player1'; // tie-breaker
+        duelState.winner = 'player1';
       } else if (p1Out) {
         duelState.winner = 'player2';
       } else if (p2Out) {
@@ -257,13 +287,11 @@ function detectWinner() {
     }
 
     if (duelState.winner) {
-      duelState.started = true; // keep your existing semantics
+      duelState.started = true;
       try { renderZones?.(); } catch {}
     }
     return duelState.winner || null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 /* ---------------- draw helpers ---------------- */
@@ -274,7 +302,7 @@ function drawFor(playerKey) {
   if (P.hand.length >= MAX_HAND) return false;
   if (P.deck.length === 0) return false;
   const top = P.deck.shift();
-  const entry = toEntry(top, playerKey === 'player2'); // bot hand face-down visually
+  const entry = toEntry(top, playerKey === 'player2');
   P.hand.push(entry);
   return true;
 }
@@ -292,7 +320,6 @@ function ensureOverlayRoot() {
   }
   return el;
 }
-
 function presentCardPicker(cards, { title = 'Choose a card' } = {}) {
   return new Promise(resolve => {
     const root = ensureOverlayRoot();
@@ -336,7 +363,6 @@ async function runWalkieSwapFor(ownerKey, walkieFieldCard) {
   const P = duelState.players?.[ownerKey];
   if (!P) return;
   ensureArrays(P);
-
   if (!Array.isArray(P.discardPile) || P.discardPile.length === 0) return;
   if (!Array.isArray(P.hand) || P.hand.length === 0) return;
 
@@ -349,11 +375,11 @@ async function runWalkieSwapFor(ownerKey, walkieFieldCard) {
   const handIdx = pickHand.index;
 
   const fromDiscard = P.discardPile.splice(discardIdx, 1)[0];
-  const fromHand    = P.hand.splice(handIdx, 1, fromDiscard)[0]; // discard → hand
-  P.discardPile.push(fromHand); // hand → discard
+  const fromHand    = P.hand.splice(handIdx, 1, fromDiscard)[0];
+  P.discardPile.push(fromHand);
 
   if (walkieFieldCard) {
-    moveFieldCardToDiscard(ownerKey, walkieFieldCard); // Walkie is consumable
+    moveFieldCardToDiscard(ownerKey, walkieFieldCard);
   }
 
   renderZones();
@@ -381,17 +407,14 @@ function drawFromDeckWhere(playerKey, predicate) {
   }
   return drawFor(playerKey);
 }
-
 const isType  = t => meta => String(meta?.type || '').toLowerCase() === t;
 const hasTagP = t => meta => hasTag(meta, t);
 
 /* ---------------- discard / resolve helpers ---------------- */
 function shouldAutoDiscard(meta) {
   if (!meta) return false;
-
   const tags = tagsOf(meta);
   if (tags.includes('discard_after_use') || tags.includes('consumable') || tags.includes('one_use')) return true;
-
   const effect = String(meta.effect || '').toLowerCase();
   const logic  = String(meta.logic_action || '').toLowerCase();
   const patterns = [
@@ -402,24 +425,17 @@ function shouldAutoDiscard(meta) {
   ];
   return patterns.some(rx => rx.test(effect) || rx.test(logic));
 }
-
 function moveFieldCardToDiscard(playerKey, cardObj) {
   const P = duelState.players[playerKey];
   ensureArrays(P);
   const i = P.field.indexOf(cardObj);
   if (i !== -1) {
     const [c] = P.field.splice(i, 1);
-
-    // 🔊 discard SFX (card-specific if provided)
     const meta = getMeta(c?.cardId);
-    if (playerKey === 'player1') {
-      audio.playForCard(meta, 'discard');
-    }
-
+    if (playerKey === 'player1') audio.playForCard(meta, 'discard');
     P.discardPile.push(c);
   }
 }
-
 function discardRandomTrap(playerKey) {
   const P = duelState.players[playerKey];
   ensureArrays(P);
@@ -433,7 +449,6 @@ function discardRandomTrap(playerKey) {
   }
   return false;
 }
-
 function revealRandomEnemyTrap(playerKey) {
   const P = duelState.players[playerKey];
   ensureArrays(P);
@@ -445,7 +460,6 @@ function revealRandomEnemyTrap(playerKey) {
   }
   return false;
 }
-
 function destroyEnemyInfected(foeKey) {
   const P = duelState.players[foeKey];
   ensureArrays(P);
@@ -465,7 +479,6 @@ function firedTrapMarks() {
   duelState._pendingFiredTraps ||= [];
   return duelState._pendingFiredTraps;
 }
-
 function reapplyFiredTrapFaceState() {
   try {
     const marks = firedTrapMarks();
@@ -499,8 +512,6 @@ function isPersistentOnField(meta) {
   const tags = new Set(tagsOf(meta));
   return tags.has('persistent') || tags.has('equip') || tags.has('gear') || tags.has('armor');
 }
-
-/** Remove only fired traps for a given owner (move to discard). */
 function purgeFiredTraps(ownerKey) {
   const P = duelState.players?.[ownerKey];
   if (!P) return;
@@ -509,12 +520,10 @@ function purgeFiredTraps(ownerKey) {
 
   const keep = [];
   const moved = [];
-
   for (const card of P.field) {
     const rawId = card?.cardId ?? card?.id ?? card?.card_id;
     const cardId = rawId != null ? pad3(rawId) : null;
     const firedTrap = !!(card && cardId && isTrap(cardId) && card._fired);
-
     if (firedTrap) {
       moved.push({
         ...card,
@@ -527,10 +536,8 @@ function purgeFiredTraps(ownerKey) {
       keep.push(card);
     }
   }
-
   if (moved.length) {
     P.discardPile.push(...moved);
-
     try {
       const toRemove = new Set(moved.map(c => c.cardId));
       const marks = firedTrapMarks();
@@ -538,15 +545,10 @@ function purgeFiredTraps(ownerKey) {
         m => !(m.owner === ownerKey && toRemove.has(pad3(m.cardId)))
       );
     } catch {}
-
-    try {
-      console.log('[purgeFiredTraps]', { owner: ownerKey, moved: moved.map(c => c.cardId) });
-    } catch {}
+    try { console.log('[purgeFiredTraps]', { owner: ownerKey, moved: moved.map(c => c.cardId) }); } catch {}
   }
-
   P.field = keep;
 }
-
 function cleanupEndOfTurnLocal(playerKey) {
   const P = duelState.players[playerKey];
   ensureArrays(P);
@@ -573,21 +575,18 @@ function cleanupEndOfTurnLocal(playerKey) {
       return (P.field || []).some(c => c && isTrap(c.cardId) && c.cardId === m.cardId && c._fired);
     });
   } catch {}
-
   if (toss.length) {
     toss.forEach(c => {
       const meta = getMeta(c?.cardId);
       if (playerKey === 'player1') audio.playForCard(meta, 'discard');
     });
     P.discardPile.push(...toss);
-    try {
-      toss.forEach(c => console.log('[cleanup] moved to discard', { owner: playerKey, id: c.cardId, reason: c._cleanupReason || 'unknown' }));
-    } catch {}
+    try { toss.forEach(c => console.log('[cleanup] moved to discard', { owner: playerKey, id: c.cardId, reason: c._cleanupReason || 'unknown' })); } catch {}
   }
   P.field = keep;
 }
 
-/* ---------- Trap activation (UI side) ---------- */
+/* ---------- Trap activation ---------- */
 async function triggerOneTrap(defenderKey) {
   const D = duelState.players[defenderKey];
   if (!D) return false;
@@ -602,23 +601,15 @@ async function triggerOneTrap(defenderKey) {
   firedTrapMarks().push({ owner: defenderKey, cardId: trap.cardId });
 
   const meta = getMeta(trap.cardId);
-
-  // Give the previous "place" SFX a tiny head start to avoid choking.
   await wait(120);
-
-  // 🔊 Play trap fire SFX and WAIT before resolving (key fix)
   try { playTrapSfx(meta); } catch {}
-  await wait(220); // small gap so the fire SFX is heard before resolution
-
-  // Now resolve the trap's effect as owned by the defender
+  await wait(220);
   await resolveImmediateEffect(meta, defenderKey);
-
   try { console.log('[trap] fired', { owner: defenderKey, id: trap.cardId }); } catch {}
   return true;
 }
 
 /* --------------------- HIT-SFX suppression --------------------- */
-// Call this right before a per-card resolve SFX to suppress the generic "hit" SFX elsewhere.
 function suppressGenericHit(ms = 300) {
   try { duelState._suppressHitSfxUntil = Date.now() + Number(ms || 0); } catch {}
 }
@@ -642,14 +633,12 @@ async function resolveImmediateEffect(meta, ownerKey) {
 
   const text = `${String(meta.effect || '')} ${String(meta.logic_action || '')}`.toLowerCase();
 
-  // damage
   const dmg = damageFromText(text);
   if (dmg > 0) {
     changeHP(foe, -dmg);
     await wait(90);
   }
 
-  // heal
   const mHeal = text.match(/(?:restore|heal)\s+(\d+)\s*hp?/);
   if (mHeal) {
     changeHP(you, +Number(mHeal[1]));
@@ -657,7 +646,6 @@ async function resolveImmediateEffect(meta, ownerKey) {
     await wait(90);
   }
 
-  // draws
   const mDraw = text.match(/draw\s+(a|\d+)\s+(?:card|cards)/);
   if (mDraw) {
     const n = mDraw[1] === 'a' ? 1 : Number(mDraw[1]);
@@ -666,20 +654,17 @@ async function resolveImmediateEffect(meta, ownerKey) {
     await wait(90);
   }
 
-  // category draws
   if (/draw\s+1\s+loot\s+card/.test(text))     drawFromDeckWhere(you, isType('loot'));
   if (/draw\s+1\s+defense\s+card/.test(text))  drawFromDeckWhere(you, isType('defense'));
   if (/draw\s+1\s+tactical\s+card/.test(text)) drawFromDeckWhere(you, isType('tactical'));
   if (/draw\s+1\s+attack\s+card/.test(text))   drawFromDeckWhere(you, isType('attack'));
   if (/draw\s+1\s+trap\s+card/.test(text))     drawFromDeckWhere(you, (m) => isType('trap')(m) || hasTag(m, 'trap'));
 
-  // skip next draw
   if (/skip\s+next\s+draw/.test(text)) {
     duelState.players[you].buffs ||= {};
     duelState.players[you].buffs.skipNextDraw = true;
   }
 
-  // destroy/remove enemy field card
   if (/(?:destroy|remove)\s+(?:1\s+)?enemy(?:\s+field)?\s+card/.test(text)) {
     const foeField = duelState.players[foe].field || [];
     if (foeField.length) {
@@ -693,16 +678,13 @@ async function resolveImmediateEffect(meta, ownerKey) {
     }
   }
 
-  // infected targets
   if (/(?:destroy|kill|remove)\s+(?:1\s+)?infected/.test(text)) {
     destroyEnemyInfected(foe);
   }
 
-  // traps
   if (/(?:disarm|disable|destroy)\s+(?:an?\s+)?trap/.test(text)) discardRandomTrap(foe);
   if (/(?:reveal|expose)\s+(?:an?\s+)?trap/.test(text)) revealRandomEnemyTrap(foe);
 
-  // 🔊 per-card resolve SFX — set temporary suppression for generic hit SFX, then play.
   try {
     suppressGenericHit(300);
     await audio.playForCard(meta, 'resolve', { channel: 'combat' });
@@ -712,7 +694,7 @@ async function resolveImmediateEffect(meta, ownerKey) {
   detectWinner();
 }
 
-/** Scan bot field for newly-placed non-traps and resolve them once (no auto-discard here). */
+/** Resolve newly-placed bot non-traps once. */
 async function resolveBotNonTrapCardsOnce() {
   const bot = duelState?.players?.player2;
   if (!bot || !Array.isArray(bot.field)) return;
@@ -725,8 +707,7 @@ async function resolveBotNonTrapCardsOnce() {
     }
   }
 }
-
-/** Scan human field for newly-placed non-traps and resolve them once. */
+/** Resolve newly-placed human non-traps once. */
 async function resolveHumanNonTrapCardsOnce() {
   const human = duelState?.players?.player1;
   if (!human || !Array.isArray(human.field)) return;
@@ -735,10 +716,7 @@ async function resolveHumanNonTrapCardsOnce() {
     if (duelState.winner) break;
     if (card && !card.isFaceDown && !isTrap(card.cardId) && !card._resolvedByUI) {
       const meta = getMeta(card.cardId);
-
-      // 🔊 ensure a placement sound for human visible cards (non-traps)
       try { await audio.playForCard(meta, 'place', { channel: 'ui' }); } catch {}
-      // Tiny delay so a trap's 'fire' SFX that follows doesn't collide with this.
       await wait(140);
 
       const n = String(meta?.name || '').toLowerCase();
@@ -782,7 +760,6 @@ async function botAutoPlayAssist() {
     renderZones();
     await wait();
 
-    // 🔊 place SFX for bot play (await + ui channel)
     try { await audio.playForCard(getMeta(final.cardId), 'place', { channel: 'ui' }); } catch {}
 
     duelState._uiPlayedThisTurn ||= [];
@@ -822,9 +799,9 @@ async function botAutoPlayAssist() {
 /* ------------------ display helpers ------------------ */
 function nameOf(playerKey) {
   const p = duelState?.players?.[playerKey] || {};
-  return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Player 1');
+  // Prefer fetched/populated names
+  return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Challenger');
 }
-
 function setTurnText() {
   const el = document.getElementById('turn-display');
   if (!el) return;
@@ -833,12 +810,11 @@ function setTurnText() {
     el.classList.add('hidden');
     return;
   }
-
   el.style.display = '';
 
   if (duelState.winner) {
-    const winnerKey = duelState.winner; // FIX: define winnerKey before use
-    el.textContent = `Winner: ${winnerKey} (${nameOf(winnerKey)})`;
+    const winnerKey = duelState.winner;
+    el.textContent = `Winner: ${nameOf(winnerKey)}`;
     el.classList.remove('hidden');
     return;
   }
@@ -848,7 +824,6 @@ function setTurnText() {
   el.textContent = `Turn: ${label} — ${nameOf(who)}`;
   el.classList.remove('hidden');
 }
-
 function setHpText() {
   const p1hpEl = document.getElementById('player1-hp');
   const p2hpEl = document.getElementById('player2-hp');
@@ -869,7 +844,6 @@ function setHpText() {
 
 /* --------- discard counter helpers --------- */
 function counterId(player) { return `${player}-discard-counter`; }
-
 function ensureCounterNode(afterNode, playerLabel = '') {
   if (!afterNode || !afterNode.parentElement) return null;
   const id = counterId(afterNode.id.replace('-hand',''));
@@ -883,20 +857,16 @@ function ensureCounterNode(afterNode, playerLabel = '') {
   if (playerLabel) el.dataset.playerLabel = playerLabel;
   return el;
 }
-
 function updateDiscardCounters() {
   try {
     const p1 = duelState?.players?.player1;
     const p2 = duelState?.players?.player2;
     ensureArrays(p1 || {});
     ensureArrays(p2 || {});
-
     const p1Hand = document.getElementById('player1-hand');
     const p2Hand = document.getElementById('player2-hand');
-
     const c1 = ensureCounterNode(p1Hand, 'player1');
     const c2 = ensureCounterNode(p2Hand, 'player2');
-
     if (c1) c1.textContent = `Discard: ${Array.isArray(p1.discardPile) ? p1.discardPile.length : 0}`;
     if (c2) c2.textContent = `Discard: ${Array.isArray(p2.discardPile) ? p2.discardPile.length : 0}`;
   } catch (e) {
@@ -906,7 +876,6 @@ function updateDiscardCounters() {
 
 /* ------------------ state normalizers ------------------ */
 function asIdString(id) { return pad3(id); }
-
 function toEntry(objOrId, defaultFaceDown = false) {
   if (typeof objOrId === 'object' && objOrId !== null) {
     const cid = objOrId.cardId ?? objOrId.id ?? objOrId.card_id ?? '000';
@@ -918,7 +887,6 @@ function toEntry(objOrId, defaultFaceDown = false) {
   }
   return { cardId: asIdString(objOrId), isFaceDown: Boolean(defaultFaceDown), _fired: false };
 }
-
 function toFieldEntry(objOrId) {
   const base = toEntry(objOrId, false);
   if (isTrap(base.cardId)) {
@@ -928,7 +896,6 @@ function toFieldEntry(objOrId) {
   }
   return base;
 }
-
 function normalizePlayerForServer(p) {
   if (!p) return { hp: MAX_HP, hand: [], field: [], deck: [], discardPile: [] };
   return {
@@ -941,7 +908,6 @@ function normalizePlayerForServer(p) {
     name: p.name || undefined,
   };
 }
-
 function clampFields(state) {
   try {
     ['player1', 'player2'].forEach(pk => {
@@ -957,10 +923,8 @@ function clampFields(state) {
     });
   } catch {}
 }
-
 function normalizeStateForServer(state) {
   clampFields(state);
-
   return {
     mode: state.mode || 'practice',
     currentPlayer: state.currentPlayer === 'player2' ? 'bot' : state.currentPlayer,
@@ -970,7 +934,6 @@ function normalizeStateForServer(state) {
     }
   };
 }
-
 function mergeServerIntoUI(server) {
   if (!server || typeof server !== 'object') return;
 
@@ -985,7 +948,6 @@ function mergeServerIntoUI(server) {
     next.players.player2 = next.players.bot;
     delete next.players.bot;
   }
-
   if (next?.currentPlayer === 'bot') next.currentPlayer = 'player2';
 
   ['player1','player2'].forEach(pk => {
@@ -1000,6 +962,10 @@ function mergeServerIntoUI(server) {
     P.discardPile = Array.isArray(P.discardPile) ? P.discardPile.map(e => toEntry(e, false)) : [];
 
     if (pk === 'player2') P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
+
+    // Preserve resolved names if server lacks them
+    if (!P.discordName && fetchedNames[pk]) P.discordName = fetchedNames[pk];
+    if (!P.name && fetchedNames[pk]) P.name = fetchedNames[pk];
   });
 
   if (localBot && next?.players?.player2) {
@@ -1041,7 +1007,6 @@ async function postBotTurn(payload) {
   }
   return res;
 }
-
 function enforceFacedownUnfiredTraps(ownerKey) {
   const P = duelState.players?.[ownerKey];
   if (!P || !Array.isArray(P.field)) return;
@@ -1097,7 +1062,6 @@ async function maybeRunBotTurn() {
 
     if (!duelState.winner) {
       const res = await postBotTurn(payload);
-
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         console.error('[UI] Bot move failed:', res.status, txt);
@@ -1138,10 +1102,7 @@ async function maybeRunBotTurn() {
           renderZones();
           await wait();
           const meta = getMeta(final.cardId);
-
-          // 🔊 place SFX for fallback bot play (await + ui channel)
           try { await audio.playForCard(meta, 'place', { channel: 'ui' }); } catch {}
-
           if (!final.isFaceDown) {
             await resolveImmediateEffect(meta, 'player2');
             final._resolvedByUI = true;
@@ -1198,7 +1159,6 @@ function ensureTurnFlags() {
   if (typeof duelState._startDrawDoneFor.player1 !== 'boolean') duelState._startDrawDoneFor.player1 = false;
   if (typeof duelState._startDrawDoneFor.player2 !== 'boolean') duelState._startDrawDoneFor.player2 = false;
 }
-
 function startTurnDrawIfNeeded() {
   if (!duelState?.started) return;
   if (duelState.winner) return;
@@ -1217,10 +1177,8 @@ function startTurnDrawIfNeeded() {
   } else {
     drawFor('player1');
   }
-
   const extra = Number(P.buffs?.extraDrawPerTurn || 0);
   for (let i = 0; i < extra; i++) drawFor('player1');
-
   if (P.buffs?.blockHealTurns > 0) P.buffs.blockHealTurns--;
 
   duelState._startDrawDoneFor.player1 = true;
@@ -1234,9 +1192,9 @@ function renderZones() {
   renderField('player2', isSpectator);
 }
 
-/* ---------------- winner overlay ---------------- */
+/* ---------------- Winner overlay ---------------- */
 function showWinnerOverlay() {
-  if (document.getElementById('duel-summary-overlay')) return; // only once
+  if (document.getElementById('duel-summary-overlay')) return;
 
   const winnerKey = duelState.winner;
   const loserKey  = winnerKey === 'player1' ? 'player2' : 'player1';
@@ -1254,7 +1212,7 @@ function showWinnerOverlay() {
 
   const title = document.createElement('div');
   title.style.cssText = 'font-size:24px; font-weight:800; margin-bottom:6px;';
-  title.textContent = `🏆 Winner: ${nameOf(winnerKey)} (${winnerKey})`;
+  title.textContent = `🏆 Winner: ${nameOf(winnerKey)}`;
 
   const sub = document.createElement('div');
   sub.style.cssText = 'opacity:.8; margin-bottom:14px;';
@@ -1347,14 +1305,92 @@ function buildSummary() {
   };
 }
 
+/* ---------------- Spectators bar (spectator view) ---------------- */
+function ensureSpectatorsBar() {
+  let bar = document.getElementById('spectators-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'spectators-bar';
+    bar.style.cssText = `
+      position: fixed; right: 12px; bottom: 12px; z-index: 9998;
+      background: rgba(15,17,20,.86); color: #d6e2ee;
+      border: 1px solid #26303a; border-radius: 10px; padding: 8px 10px;
+      font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+      max-width: min(40vw, 320px);
+    `;
+    bar.innerHTML = `<div style="opacity:.8;margin-bottom:6px;font-weight:700;">Spectators</div><div id="spectators-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>`;
+    document.body.appendChild(bar);
+  }
+  return bar;
+}
+
+function renderSpectators(list) {
+  const bar = ensureSpectatorsBar();
+  const box = bar.querySelector('#spectators-list');
+  box.innerHTML = '';
+  if (!Array.isArray(list) || list.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.opacity = '.6';
+    empty.textContent = 'None';
+    box.appendChild(empty);
+    return;
+  }
+  list.forEach(n => {
+    const pill = document.createElement('span');
+    pill.textContent = String(n);
+    pill.style.cssText = `
+      display:inline-block; border:1px solid #2b3946; border-radius:999px;
+      padding:3px 8px; background:#12202c; color:#d6e2ee;`;
+    box.appendChild(pill);
+  });
+}
+
+let spectatorsTimer = null;
+async function pollSpectators() {
+  // Only in spectator view with an API and a duel id
+  if (!isSpectator || !(API_OVERRIDE || API_BASE) || !DUEL_ID) return;
+
+  const base = API_OVERRIDE || API_BASE;
+  const candidates = [
+    `${base}/duel/${encodeURIComponent(DUEL_ID)}/spectators`,
+    `${base}/spectators?duel=${encodeURIComponent(DUEL_ID)}`
+  ];
+
+  let names = null;
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        // accept { spectators: [...] } or plain [...]
+        names = Array.isArray(data) ? data : (Array.isArray(data?.spectators) ? data.spectators : null);
+        if (names) break;
+      }
+    } catch { /* try next */ }
+  }
+  if (!names) names = [];
+
+  renderSpectators(
+    names.map(x => (x?.discordName || x?.name || x?.username || x || 'Unknown'))
+  );
+}
+
+function beginSpectatorsLoop() {
+  if (!isSpectator) return;
+  ensureSpectatorsBar();
+  if (spectatorsTimer) clearInterval(spectatorsTimer);
+  spectatorsTimer = setInterval(pollSpectators, 5000);
+  pollSpectators().catch(()=>{});
+}
+
 /* ------------------ main render ------------------ */
 export async function renderDuelUI(root) {
   await ensureAllCardsLoaded();
 
-  audio.configure({
-    bgSrc: '/audio/bg/Follow the Trail.mp3',
-    sfxBase: '/audio/sfx/',
-  });
+  // Resolve names from tokens first (non-blocking for rest of UI)
+  await initPlayerNames();
+
+  audio.configure({ bgSrc: '/audio/bg/Follow the Trail.mp3', sfxBase: '/audio/sfx/' });
   audio.setDebug(true);
   audio.initAutoplayUnlock();
   installSoundToggleUI();
@@ -1362,16 +1398,12 @@ export async function renderDuelUI(root) {
   detectWinner();
 
   try {
-    if (duelState?.started) {
-      document.body.classList.add('duel-ready');
-    } else {
-      document.body.classList.remove('duel-ready');
-    }
+    if (duelState?.started) document.body.classList.add('duel-ready');
+    else document.body.classList.remove('duel-ready');
   } catch {}
 
-  // start background music once the duel starts
   if (duelState?.started && !audio.isBgPlaying()) {
-    audio.startBg(); // starts /audio/bg/Follow the Trail.mp3 looping
+    audio.startBg();
   }
 
   clampFields(duelState);
@@ -1379,7 +1411,7 @@ export async function renderDuelUI(root) {
   reapplyFiredTrapFaceState();
   await resolveBotNonTrapCardsOnce();
 
-  // 🔊 detect newly placed player1 field cards and play 'place' before resolving effects
+  // place SFX for human
   playPlaceSfxForNewFieldCards('player1');
 
   await resolveHumanNonTrapCardsOnce();
@@ -1391,11 +1423,11 @@ export async function renderDuelUI(root) {
   setTurnText();
   updateDiscardCounters();
 
-  if (duelState.winner) {
-    // Hide "Start Practice Duel" button if present
-    try { document.querySelector('[data-start-practice]')?.classList?.add('hidden'); } catch {}
+  // Start spectators polling if applicable
+  beginSpectatorsLoop();
 
-    // Save summary (non-blocking) and show overlay instead of redirecting
+  if (duelState.winner) {
+    try { document.querySelector('[data-start-practice]')?.classList?.add('hidden'); } catch {}
     if (!duelState.summarySaved && !isSpectator) {
       duelState.summarySaved = true;
       const summary = buildSummary();
@@ -1405,7 +1437,6 @@ export async function renderDuelUI(root) {
         body: JSON.stringify(summary),
       }).catch(err => console.error('[UI] Summary save failed:', err));
     }
-
     showWinnerOverlay();
     return;
   }
