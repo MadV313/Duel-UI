@@ -16,7 +16,7 @@ function setDuelReady(flag) { try { document.body.classList.toggle('duel-ready',
 
 const MAX_HP = 200;
 
-/* ---------- token discovery & persistence (new) ---------- */
+/* ---------- token discovery & persistence ---------- */
 let PLAYER_TOKEN = '';
 try {
   const qs = new URLSearchParams(location.search);
@@ -97,6 +97,20 @@ function showZonesAndControls() {
   setDuelReady(true);
 }
 
+/* -------- helper: fetch Player-1 display name via /me/:token/stats -------- */
+async function fetchChallengerNameFromStats() {
+  if (!API_BASE || !PLAYER_TOKEN) return null;
+  try {
+    const r = await fetch(`${API_BASE}/me/${encodeURIComponent(PLAYER_TOKEN)}/stats`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const s = await r.json().catch(() => null);
+    if (!s || typeof s !== 'object') return null;
+    return s.discordName || s.userId || null;
+  } catch {
+    return null;
+  }
+}
+
 /* ---------------- main ---------------- */
 export async function loadPracticeDuel() {
   // Hard gate: mark duel as not started so other renderers/bot logic ignore it
@@ -112,7 +126,7 @@ export async function loadPracticeDuel() {
     const url = `${API_BASE}/bot/practice`;
     console.log('[practice] fetch →', url);
 
-    // Attach token header if we have it (fetch-shim also does this, but we add here defensively)
+    // Attach token header if we have it (harmless if server ignores it)
     const headers = PLAYER_TOKEN ? { 'X-Player-Token': PLAYER_TOKEN } : undefined;
 
     const res = await fetch(url, { method: 'GET', headers });
@@ -138,13 +152,18 @@ export async function loadPracticeDuel() {
   // 3) Inject/derive display names (so the top-left shows YOUR name)
   try {
     const qs = new URLSearchParams(location.search);
-    const fromQuery = qs.get('user') || qs.get('name') || null;
+    const fromQuery    = qs.get('user') || qs.get('name') || null;
+    const fromStorage  = localStorage.getItem('DUEL_PLAYER_NAME');
+    const backendP1    = data?.players?.player1?.discordName || data?.players?.player1?.name || null;
+    const backendP2    = data?.players?.player2?.discordName || data?.players?.player2?.name || null;
 
-    const fromStorage = localStorage.getItem('DUEL_PLAYER_NAME');
-    const backendP1   = data?.players?.player1?.discordName || data?.players?.player1?.name;
-    const backendP2   = data?.players?.player2?.discordName || data?.players?.player2?.name;
+    // If P1 name missing, try the stats endpoint with the token
+    let statsName = null;
+    if (!fromQuery && !fromStorage && !backendP1) {
+      statsName = await fetchChallengerNameFromStats();
+    }
 
-    const p1Name = (fromQuery || fromStorage || backendP1 || 'Player 1').toString();
+    const p1Name = (fromQuery || fromStorage || backendP1 || statsName || 'Player 1').toString();
     const p2Name = (backendP2 || 'Practice Bot').toString();
 
     if (fromQuery) localStorage.setItem('DUEL_PLAYER_NAME', p1Name);
