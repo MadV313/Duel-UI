@@ -1,22 +1,34 @@
 // scripts/allCards.js
-// Robust JSON loader with a safe fallback for environments that
-// don’t fully support `import ... assert { type: "json" }`.
+// Fetch-only loader for allCards.json (no JSON-module import).
+// Works on GitHub Pages, Railway, and local dev without MIME warnings.
 
-let cards;
+/* global fetch */
+export async function loadAllCardsJSON({ base = '' } = {}) {
+  // Try a couple of sensible locations. You can add more if needed.
+  const candidates = [
+    `${base}/scripts/allCards.json`,
+    `/scripts/allCards.json`,
+    `./scripts/allCards.json`, // relative to current page
+  ];
 
-try {
-  // Prefer native JSON module import (modern browsers)
-  const mod = await import('./allCards.json', { assert: { type: 'json' } });
-  cards = mod.default;
-} catch (err) {
-  // Fallback: fetch the JSON file directly
-  console.warn('[allCards] JSON import failed, falling back to fetch:', err?.message || err);
-  const url = new URL('./allCards.json', import.meta.url);
-  const res = await fetch(url.toString(), { credentials: 'same-origin' });
-  if (!res.ok) {
-    throw new Error(`[allCards] Failed to load allCards.json: ${res.status} ${await res.text().catch(()=>'')}`);
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (Array.isArray(data) || (data && typeof data === 'object')) {
+        return data;
+      }
+    } catch (_) {
+      // swallow and try next candidate
+    }
   }
-  cards = await res.json();
+
+  console.warn('[allCards] Could not load allCards.json from any candidate URL.');
+  return []; // safe fallback so the UI can still run
 }
 
-export default cards;
+// Optional: default export is the loader function, so
+// import allCards from './allCards.js' still works if you call it.
+// Usage: const list = await allCards();
+export default loadAllCardsJSON;
