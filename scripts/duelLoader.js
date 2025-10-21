@@ -1,7 +1,6 @@
 // scripts/duelLoader.js
 // Auto-start loader for duels launched from Discord links (PvP or Practice)
-// Now also carries the invoking player's ?token= (and ?api=, ?imgbase=) so the user
-// can navigate back to Hub/other UIs with their identity intact.
+// Carries ?token / ?api / ?imgbase for identity + routing.
 
 import { duelState } from './duelState.js';
 import { renderDuelUI } from './renderDuelUI.js';
@@ -22,9 +21,9 @@ const HUB_QS  = (qs.get('hub') || '').trim();
 
 // Persist identity so other modules can access it (and for future reloads)
 try {
-  if (TOKEN) localStorage.setItem('sv13.token', TOKEN);
+  if (TOKEN)  localStorage.setItem('sv13.token', TOKEN);
   if (API_QS) localStorage.setItem('sv13.api', API_QS);
-  if (IMGB) localStorage.setItem('sv13.imgbase', IMGB);
+  if (IMGB)   localStorage.setItem('sv13.imgbase', IMGB);
   // also expose at runtime
   window.SV13 = Object.assign(window.SV13 || {}, { token: TOKEN, api: API_QS, imgbase: IMGB });
 } catch { /* ignore */ }
@@ -34,17 +33,17 @@ try {
   const withParams = (href) => {
     try {
       const u = new URL(href, location.href);
-      if (TOKEN) u.searchParams.set('token', TOKEN);
+      if (TOKEN)  u.searchParams.set('token', TOKEN);
       if (API_QS) u.searchParams.set('api', API_QS);
-      if (IMGB) u.searchParams.set('imgbase', IMGB);
+      if (IMGB)   u.searchParams.set('imgbase', IMGB);
       u.searchParams.set('ts', String(Date.now())); // cache-bust
       return u.toString();
     } catch {
       // relative fallback
       const parts = [];
-      if (TOKEN) parts.push(`token=${encodeURIComponent(TOKEN)}`);
+      if (TOKEN)  parts.push(`token=${encodeURIComponent(TOKEN)}`);
       if (API_QS) parts.push(`api=${encodeURIComponent(API_QS)}`);
-      if (IMGB) parts.push(`imgbase=${encodeURIComponent(IMGB)}`);
+      if (IMGB)   parts.push(`imgbase=${encodeURIComponent(IMGB)}`);
       parts.push(`ts=${Date.now()}`);
       const sep = href.includes('?') ? '&' : '?';
       return parts.length ? `${href}${sep}${parts.join('&')}` : href;
@@ -57,6 +56,48 @@ try {
     a.href = withParams(base);
   });
 })();
+
+/* ──────────────────────────────────────────────────────────
+ * Helper: pull Player 1 display name from backend stats
+ * ────────────────────────────────────────────────────────── */
+async function fetchChallengerName() {
+  if (!TOKEN) return null;
+  try {
+    const r = await fetch(apiUrl(`/me/${encodeURIComponent(TOKEN)}/stats`), { cache: 'no-store' });
+    if (!r.ok) return null;
+    const s = await r.json().catch(() => null);
+    if (!s || typeof s !== 'object') return null;
+    return s.discordName || s.userId || null;
+  } catch {
+    return null;
+  }
+}
+
+// Try to update an on-page heading if one exists.
+// We avoid hard dependencies: if not found, we quietly skip.
+function setChallengerHeading(name, hpText = '200') {
+  if (!name) return;
+
+  // Preferred explicit hooks if your HTML has them
+  const elById  = document.getElementById('challengerName');
+  const elByCls = document.querySelector('.challenger-name, [data-challenger-title]');
+  const target  = elById || elByCls;
+
+  if (target) {
+    target.textContent = `${name} (Player 1) HP: ${hpText}`;
+    return;
+  }
+
+  // Fallback: try to locate a heading containing "Challenger" and "HP"
+  const headings = Array.from(document.querySelectorAll('h1,h2,h3,.title,.hp-title'));
+  for (const h of headings) {
+    const t = h.textContent || '';
+    if (/Challenger/i.test(t) && /HP\s*:\s*\d+/i.test(t)) {
+      h.textContent = `${name} (Player 1) HP: ${hpText}`;
+      break;
+    }
+  }
+}
 
 // Normalize server payload into the shape our UI expects
 function normalizeServerState(data) {
@@ -86,24 +127,38 @@ function normalizeServerState(data) {
 
   // Friendly labels for practice if server omitted them
   if (mode === 'practice') {
-    data.players.player1.discordName ||= data.players.player1.discordName || data.players.player1.name || 'You';
-    data.players.player2.discordName ||= data.players.player2.discordName || data.players.player2.name || 'Practice Bot';
+    data.players.player1.discordName ||= data.players.player1.name || 'You';
+    data.players.player2.discordName ||= data.players.player2.name || 'Practice Bot';
   }
 
   return data;
 }
 
+async function hydrateChallengerNameIfMissing() {
+  // If we already have a name (e.g., server provided), skip the fetch.
+  const existing = duelState?.players?.player1?.discordName;
+  if (existing) {
+    setChallengerHeading(existing, '200');
+    return;
+  }
+
+  const name = await fetchChallengerName();
+  if (name) {
+    duelState.players = duelState.players || {};
+    duelState.players.player1 = duelState.players.player1 || {};
+    duelState.players.player1.discordName = name;
+    setChallengerHeading(name, '200');
+  }
+}
+
 async function loadPractice() {
   // If your backend scopes state by token, optionally include it as a header.
-  // This is harmless if unused by the server.
   const headers = {};
   if (TOKEN) headers['X-Player-Token'] = TOKEN;
 
   // Try to read existing state first (Discord command already initialized it)
   let res = await fetch(apiUrl('/duel/state'), { headers }).catch(() => null);
 
-  // If the state isn't available, we intentionally do NOT auto-initialize here.
-  // Practice should be started by the Discord command to keep flows consistent.
   if (!res || !res.ok) {
     const peek = res && (await res.text().catch(() => '')) || '';
     console.error('❌ Practice load failed:', peek.slice(0, 200));
@@ -120,6 +175,10 @@ async function loadPractice() {
   Object.assign(duelState, data);
   duelState.started = false; // gate UI until the user presses "Start Practice Duel"
   try { document.body.classList.remove('duel-ready'); } catch {}
+
+  // Ensure Player-1 display name is filled (stats endpoint)
+  await hydrateChallengerNameIfMissing();
+
   console.log('[duelLoader] Practice state hydrated; waiting for Start button to run coin flip.');
 }
 
@@ -148,6 +207,9 @@ async function loadPvp(p1, p2) {
   }
 
   Object.assign(duelState, data);
+
+  // Ensure Player-1 display name (before render if missing)
+  await hydrateChallengerNameIfMissing();
 
   // PvP links still auto-render (no Start button flow here)
   renderDuelUI();
