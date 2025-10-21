@@ -1,34 +1,47 @@
 // scripts/allCards.js
-// Fetch-only loader for allCards.json (no JSON-module import).
-// Works on GitHub Pages, Railway, and local dev without MIME warnings.
+// Unified loader with full backward compatibility.
+// - No "import ... assert { type: 'json' }" (avoids MIME warning).
+// - Named export:  loadAllCardsJSON()  → Promise<array>
+// - Default export: the resolved array (via top-level await)
+// - Mirrors result to window.__ALL_CARDS__ for legacy reads.
 
-/* global fetch */
-export async function loadAllCardsJSON({ base = '' } = {}) {
-  // Try a couple of sensible locations. You can add more if needed.
-  const candidates = [
-    `${base}/scripts/allCards.json`,
-    `/scripts/allCards.json`,
-    `./scripts/allCards.json`, // relative to current page
-  ];
+const CANDIDATES = [
+  '/scripts/allCards.json',
+  './scripts/allCards.json',
+  './allCards.json',
+  '/allCards.json',
+];
 
-  for (const url of candidates) {
+/** Fetch and parse allCards.json from a few candidate paths. */
+export async function loadAllCardsJSON() {
+  let lastErr;
+  for (const url of CANDIDATES) {
     try {
-      const r = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
-      if (!r.ok) continue;
-      const data = await r.json();
-      if (Array.isArray(data) || (data && typeof data === 'object')) {
-        return data;
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      const json = JSON.parse(text);
+      if (Array.isArray(json)) {
+        try { window.__ALL_CARDS__ = json; } catch {}
+        console.log('[allCards] loaded from', url, 'count=', json.length);
+        return json;
       }
-    } catch (_) {
-      // swallow and try next candidate
+      // Some builds may ship as {cards:[...]} – tolerate that
+      if (json && Array.isArray(json.cards)) {
+        try { window.__ALL_CARDS__ = json.cards; } catch {}
+        console.log('[allCards] loaded from', url, 'count=', json.cards.length);
+        return json.cards;
+      }
+      throw new Error('Not an array');
+    } catch (e) {
+      lastErr = e;
     }
   }
-
-  console.warn('[allCards] Could not load allCards.json from any candidate URL.');
-  return []; // safe fallback so the UI can still run
+  console.warn('[allCards] failed to load from candidates:', lastErr);
+  try { window.__ALL_CARDS__ = []; } catch {}
+  return [];
 }
 
-// Optional: default export is the loader function, so
-// import allCards from './allCards.js' still works if you call it.
-// Usage: const list = await allCards();
-export default loadAllCardsJSON;
+// Default export preserves old `import allCards from './allCards.js'` usage.
+const __ALL = await loadAllCardsJSON();
+export default __ALL;
