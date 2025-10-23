@@ -7,6 +7,37 @@ function asIdString(cardId) {
   return String(cardId).padStart(3, '0');
 }
 
+/* ---------- tiny helpers for labels ---------- */
+function nameOf(playerKey) {
+  const p = duelState?.players?.[playerKey] || {};
+  return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Challenger');
+}
+function ensureHandLabelFor(playerKey) {
+  const handContainer = document.getElementById(`${playerKey}-hand`);
+  if (!handContainer || !handContainer.parentElement) return null;
+
+  const id = `${playerKey}-hand-label`;
+  let label = document.getElementById(id);
+  if (!label) {
+    label = document.createElement('div');
+    label.id = id;
+    label.className = 'zone-label hand-label';
+    // insert just before the hand container
+    handContainer.insertAdjacentElement('beforebegin', label);
+  }
+  return label;
+}
+function updateHandLabel(playerKey, count) {
+  const label = ensureHandLabelFor(playerKey);
+  if (!label) return;
+  const who = nameOf(playerKey);
+  const n = Number(count) || 0;
+  // Example: "Hand — madv313 (4)"
+  label.textContent = `Hand — ${who} (${n})`;
+  label.dataset.player = playerKey;
+  label.dataset.count = String(n);
+}
+
 /* ---------- lightweight action menu (singleton) ---------- */
 function getActionMenu() {
   let menu = document.getElementById('card-action-menu');
@@ -126,6 +157,9 @@ export function renderHand(player, isSpectator = false) {
     const discard = duelState?.players?.[player]?.discardPile || [];
     setDiscardCount(player, discard.length);
   } catch {}
+
+  // ✅ Update/ensure the "Hand — {Name} (N)" label
+  updateHandLabel(player, hand.length);
 
   if (hand.length === 0) return;
 
