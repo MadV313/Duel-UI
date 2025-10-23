@@ -799,8 +799,7 @@ async function botAutoPlayAssist() {
 /* ------------------ display helpers ------------------ */
 function nameOf(playerKey) {
   const p = duelState?.players?.[playerKey] || {};
-  // Prefer fetched/populated names
-  return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Challenger');
+  return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Unknown');
 }
 function setTurnText() {
   const el = document.getElementById('turn-display');
@@ -820,8 +819,7 @@ function setTurnText() {
   }
 
   const who = duelState.currentPlayer;
-  const label = who === 'player1' ? 'Challenger' : 'Opponent';
-  el.textContent = `Turn: ${label} — ${nameOf(who)}`;
+  el.textContent = `Turn: ${nameOf(who)}`;
   el.classList.remove('hidden');
 }
 function setHpText() {
@@ -834,10 +832,10 @@ function setHpText() {
   try {
     const rows = hpWrap?.querySelectorAll('div');
     if (rows && rows[0]) {
-      rows[0].innerHTML = `Challenger (${nameOf('player1')}) HP: <span id="player1-hp">${duelState.players.player1.hp}</span>`;
+      rows[0].innerHTML = `${nameOf('player1')} HP: <span id="player1-hp">${duelState.players.player1.hp}</span>`;
     }
     if (rows && rows[1]) {
-      rows[1].innerHTML = `Opponent (${nameOf('player2')}) HP: <span id="player2-hp">${duelState.players.player2.hp}</span>`;
+      rows[1].innerHTML = `${nameOf('player2')} HP: <span id="player2-hp">${duelState.players.player2.hp}</span>`;
     }
   } catch {}
 }
@@ -988,6 +986,10 @@ function mergeServerIntoUI(server) {
   clampFields(next);
 
   Object.assign(duelState, next);
+
+  // extra safety: keep traps face-down for spectators after merges
+  enforceFacedownUnfiredTraps('player1');
+  enforceFacedownUnfiredTraps('player2');
 }
 
 /* ---------------- fetch helpers (bot) ---------------- */
@@ -1022,12 +1024,16 @@ function apiBase() {
   return (API_OVERRIDE || API_BASE || '').replace(/\/+$/, '');
 }
 let _syncTimer = null;
-let _lastSent = ''; // simple string compare to shrink traffic
+let _lastSent = '';
+let _syncBackoffMs = 350; // adaptive debounce
+let _syncCooldownUntil = 0;
 
 async function syncToServer() {
   const base = apiBase();
   if (!base) return;
   if (isSpectator) return; // spectators should not push state
+  if (Date.now() < _syncCooldownUntil) return;
+
   try {
     const payload = normalizeStateForServer(duelState);
     const s = JSON.stringify(payload);
@@ -1039,19 +1045,25 @@ async function syncToServer() {
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: s,
     });
+
     if (!res.ok) {
       const t = await res.text().catch(() => '');
       console.warn('[UI] sync failed', res.status, t);
+
+      if (res.status === 429) {
+        // basic backoff
+        _syncBackoffMs = Math.min(_syncBackoffMs * 2, 8000);
+        _syncCooldownUntil = Date.now() + _syncBackoffMs;
+      }
     } else {
-      // optional: read back server state if you want strict echo
-      // const echoed = await res.json().catch(() => null);
-      // if (echoed?.state) mergeServerIntoUI(echoed.state);
+      // decay backoff on success
+      _syncBackoffMs = Math.max(250, Math.floor(_syncBackoffMs * 0.8));
     }
   } catch (e) {
     console.warn('[UI] sync error', e);
   }
 }
-function scheduleSync(delay = 120) {
+function scheduleSync(delay = _syncBackoffMs) {
   if (_syncTimer) clearTimeout(_syncTimer);
   _syncTimer = setTimeout(syncToServer, delay);
 }
@@ -1224,13 +1236,43 @@ function startTurnDrawIfNeeded() {
 }
 
 /* ----------------- render helpers ----------------- */
+function ensureZoneLabels() {
+  // Adds small labels near each zone without changing render* modules
+  const ensure = (id, text) => {
+    const host = document.getElementById(id);
+    if (!host) return;
+    const lblId = `${id}-label`;
+    let el = document.getElementById(lblId);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = lblId;
+      el.style.cssText = `
+        position:absolute; transform:translateY(-1.6rem);
+        font-weight:700; font-size:14px; text-shadow:0 1px 2px #000;
+        color:#d6e2ee; pointer-events:none;`;
+      host.style.position = host.style.position || 'relative';
+      host.insertAdjacentElement('beforebegin', el);
+    }
+    el.textContent = text;
+  };
+  ensure('player1-hand', `${nameOf('player1')}'s Hand`);
+  ensure('player2-hand', `${nameOf('player2')}'s Hand`);
+  ensure('player1-field', `${nameOf('player1')}'s Field`);
+  ensure('player2-field', `${nameOf('player2')}'s Field`);
+}
 function renderZones() {
   renderHand('player1', isSpectator);
   renderHand('player2', isSpectator);
   renderField('player1', isSpectator);
   renderField('player2', isSpectator);
 
-  // NEW: push a tiny snapshot to server so spectators mirror UI
+  ensureZoneLabels();
+
+  // keep traps face-down (especially for spectators)
+  enforceFacedownUnfiredTraps('player1');
+  enforceFacedownUnfiredTraps('player2');
+
+  // push a tiny snapshot to server so spectators mirror UI
   scheduleSync();
 }
 
@@ -1429,6 +1471,26 @@ function beginSpectatorsLoop() {
 }
 
 /* ------------------ main render ------------------ */
+function makeSoundButtonClickable() {
+  // grab common ids/classes and make sure it sits above overlays & is clickable
+  const candidates = [
+    '#sound-toggle', '#sv-sound-toggle', '.sound-toggle', '[data-sound-toggle]'
+  ];
+  for (const sel of candidates) {
+    const el = document.querySelector(sel);
+    if (el) {
+      el.style.zIndex = '10001';
+      el.style.pointerEvents = 'auto';
+      if (!el.style.position || el.style.position === 'static') {
+        el.style.position = 'fixed';
+        el.style.right = '12px';
+        el.style.top = '12px';
+      }
+      break;
+    }
+  }
+}
+
 export async function renderDuelUI(root) {
   await ensureAllCardsLoaded();
 
@@ -1439,6 +1501,7 @@ export async function renderDuelUI(root) {
   audio.setDebug(true);
   audio.initAutoplayUnlock();
   installSoundToggleUI();
+  setTimeout(makeSoundButtonClickable, 0);
 
   detectWinner();
 
