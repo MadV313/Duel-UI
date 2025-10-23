@@ -8,6 +8,12 @@ function asIdString(cardId) {
   return String(cardId).padStart(3, '0');
 }
 
+/** Lightweight trap detection (kept local to avoid cross-module coupling). */
+function isTrapIdByRange(cardId) {
+  const n = Number(String(cardId).replace(/\D/g, ''));
+  return Number.isFinite(n) && n >= 106 && n <= 120;
+}
+
 function makePlaceholder() {
   const placeholder = document.createElement('div');
   placeholder.className = 'card slot-placeholder';
@@ -37,21 +43,32 @@ export function renderField(player, isSpectator = false) {
   for (let index = 0; index < Math.min(cards.length, MAX_FIELD_SLOTS); index++) {
     const card = cards[index];
 
-    // Accept either { cardId, isFaceDown } or raw string/number id
-    const cardId = typeof card === 'object' && card !== null
+    // Accept either { cardId, isFaceDown, _fired } or raw string/number id
+    const rawId = (typeof card === 'object' && card !== null)
       ? (card.cardId ?? card.id ?? card.card_id ?? '000')
       : card;
 
-    const isFaceDown = Boolean(
-      typeof card === 'object' && card !== null && card.isFaceDown
-    );
+    const cardId = asIdString(rawId);
+    const fired = Boolean(typeof card === 'object' && card !== null && card._fired);
 
-    const el = renderCard(asIdString(cardId), isFaceDown);
+    // Base facedown from state
+    let isFaceDown = Boolean(typeof card === 'object' && card !== null && card.isFaceDown);
+
+    // ✅ Enforce: traps are ALWAYS facedown until triggered (_fired)
+    // Applies to both normal and spectator views.
+    const trapByRange = isTrapIdByRange(cardId);
+    if (trapByRange && !fired) {
+      isFaceDown = true;
+    }
+
+    const el = renderCard(cardId, isFaceDown);
 
     // Debug attrs
     el.dataset.player = player;
     el.dataset.index = String(index);
-    el.dataset.cardId = asIdString(cardId);
+    el.dataset.cardId = cardId;
+    el.dataset.isTrap = String(!!trapByRange);
+    el.dataset.fired = String(!!fired);
 
     if (!isSpectator) {
       el.classList.add('clickable');
