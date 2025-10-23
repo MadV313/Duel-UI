@@ -440,19 +440,47 @@ export const audio = {
   setDebug(on) { store.debug = !!on; },
 };
 
-// Optional: a tiny UI toggle (top-right speaker)
+// --- helpers to keep the sound toggle clickable above overlays
+function ensureSoundButtonStyles(el) {
+  if (!el) return;
+  el.style.pointerEvents = 'auto';        // be clickable even over canvases/overlays
+  el.style.zIndex = '10001';              // above winner overlay (10000) and picker (9999)
+  if (!el.style.position || el.style.position === 'static') {
+    el.style.position = 'fixed';
+  }
+  if (!el.style.top) el.style.top = '14px';
+  if (!el.style.right) el.style.right = '14px';
+}
+
+/**
+ * Optional: a tiny UI toggle (top-right speaker)
+ * Ensures it's always clickable: pointer-events:auto; high z-index; fixed positioning.
+ */
 export function installSoundToggleUI() {
-  if (document.getElementById('sound-toggle')) return;
-  const btn = document.createElement('button');
+  let btn = document.getElementById('sound-toggle');
+  if (btn) {
+    ensureSoundButtonStyles(btn);
+    return;
+  }
+
+  btn = document.createElement('button');
   btn.id = 'sound-toggle';
   btn.type = 'button';
   btn.title = 'Toggle sound';
+  btn.setAttribute('data-sound-toggle', ''); // allows alt selector hooks
   btn.style.cssText = `
     position:fixed; right:14px; top:14px; z-index:10001;
     width:40px;height:40px;border-radius:10px;border:1px solid #2b3946;
-    background:#101820;color:#dfe7ef;cursor:pointer;font-size:18px;`;
+    background:#101820;color:#dfe7ef;cursor:pointer;font-size:18px;
+    pointer-events:auto;`;
+
+  // Stop parent overlays from swallowing the click
+  btn.addEventListener('click', (e) => e.stopPropagation(), true);
+
   const updateIcon = () => btn.textContent = store.muted ? '🔇' : '🔊';
   btn.onclick = () => { audio.toggleMute(); updateIcon(); };
   updateIcon();
+
   document.body.appendChild(btn);
+  ensureSoundButtonStyles(btn);
 }
