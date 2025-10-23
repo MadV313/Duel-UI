@@ -1017,6 +1017,45 @@ function enforceFacedownUnfiredTraps(ownerKey) {
   }
 }
 
+/* --------------------- NEW: server snapshot sync --------------------- */
+function apiBase() {
+  return (API_OVERRIDE || API_BASE || '').replace(/\/+$/, '');
+}
+let _syncTimer = null;
+let _lastSent = ''; // simple string compare to shrink traffic
+
+async function syncToServer() {
+  const base = apiBase();
+  if (!base) return;
+  if (isSpectator) return; // spectators should not push state
+  try {
+    const payload = normalizeStateForServer(duelState);
+    const s = JSON.stringify(payload);
+    if (s === _lastSent) return;
+    _lastSent = s;
+
+    const res = await fetch(`${base}/duel/sync`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: s,
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      console.warn('[UI] sync failed', res.status, t);
+    } else {
+      // optional: read back server state if you want strict echo
+      // const echoed = await res.json().catch(() => null);
+      // if (echoed?.state) mergeServerIntoUI(echoed.state);
+    }
+  } catch (e) {
+    console.warn('[UI] sync error', e);
+  }
+}
+function scheduleSync(delay = 120) {
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(syncToServer, delay);
+}
+
 /* ---------------- bot turn driver ----------------- */
 let botTurnInFlight = false;
 const isSpectator = new URLSearchParams(window.location.search).get('spectator') === 'true';
@@ -1190,6 +1229,9 @@ function renderZones() {
   renderHand('player2', isSpectator);
   renderField('player1', isSpectator);
   renderField('player2', isSpectator);
+
+  // NEW: push a tiny snapshot to server so spectators mirror UI
+  scheduleSync();
 }
 
 /* ---------------- Winner overlay ---------------- */
@@ -1234,7 +1276,7 @@ function showWinnerOverlay() {
       <div>Field: <b>${(P.field||[]).length}</b></div>
       <div>Hand: <b>${(P.hand||[]).length}</b></div>
       <div>Deck: <b>${(P.deck||[]).length}</b></div>
-      <div>Discard: <b>${(P.discardPile||[]).length}</b></div>
+      <div>Discard: <b>${(P.discard||P.discardPile||[]).length}</b></div>
     `;
     wrap.appendChild(h); wrap.appendChild(list);
     return wrap;
@@ -1277,6 +1319,9 @@ function showWinnerOverlay() {
 
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+
+  // push one last sync so spectators lock on winner state
+  scheduleSync(10);
 }
 
 function buildSummary() {
