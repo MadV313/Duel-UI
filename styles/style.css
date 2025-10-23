@@ -573,3 +573,28 @@ a.return-to-hub:hover {
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
   user-select: none;
 }
+
+/* =========================================
+   Non-breaking additions for latest tweaks
+   ========================================= */
+
+/* Keep the tiny speaker button clickable above overlays */
+#sound-toggle {
+  pointer-events: auto !important;
+  z-index: 10001 !important; /* above coin flip (9999) and overlays */
+}
+
+/* Zone labels (used in index.html) */
+.zone-label {
+  text-align: center;
+  font: 600 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell;
+  color: #c9d4df;
+  opacity: .85;
+  margin: 6px 0 2px;
+  user-select: none;
+}
+
+/* Safety: if you ever add this helper, keep behavior stable */
+.hand--no-overlap {
+  /* reserved utility class; no-op to avoid layout surprises */
+}
