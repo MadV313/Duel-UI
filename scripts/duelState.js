@@ -3,6 +3,47 @@
 import { renderDuelUI } from './renderDuelUI.js';
 import { apiUrl } from './config.js';
 
+// ------------------------------
+// Constants + small helpers
+// ------------------------------
+const MAX_FIELD_SLOTS = 3;
+const MAX_HAND = 4;
+
+function pad3(v) { return String(v).padStart(3, '0'); }
+function asId(v) {
+  const n = Number(String(v).replace(/\D/g, ''));
+  return Number.isFinite(n) ? pad3(n) : pad3(v || '000');
+}
+// A lightweight trap heuristic (kept consistent with UI): id range 106–120
+function isTrapIdByRange(idish) {
+  const n = Number(asId(idish));
+  return n >= 106 && n <= 120;
+}
+function toEntry(objOrId) {
+  if (objOrId && typeof objOrId === 'object') {
+    const cid = asId(objOrId.cardId ?? objOrId.id ?? objOrId.card_id);
+    return {
+      cardId: cid,
+      isFaceDown: Boolean(objOrId.isFaceDown),
+      _fired: Boolean(objOrId._fired),
+    };
+  }
+  return { cardId: asId(objOrId), isFaceDown: false, _fired: false };
+}
+
+function safeRender() {
+  try { renderDuelUI(); } catch {}
+}
+
+function ensurePlayerShape(p) {
+  if (!p || typeof p !== 'object') return;
+  p.hand        ||= [];
+  p.field       ||= [];
+  p.deck        ||= [];
+  p.discardPile ||= [];
+  p.buffs       ||= {}; // bag for per-turn flags: skipNextDraw, skipNextTurn, extraDrawPerTurn, blockHealTurns, etc.
+}
+
 // The single source of truth for the UI
 export const duelState = {
   players: {
@@ -20,21 +61,8 @@ export const duelState = {
 };
 
 // ------------------------------
-// Helpers
+// Normalization
 // ------------------------------
-function safeRender() {
-  try { renderDuelUI(); } catch {}
-}
-
-function ensurePlayerShape(p) {
-  if (!p || typeof p !== 'object') return;
-  p.hand        ||= [];
-  p.field       ||= [];
-  p.deck        ||= [];
-  p.discardPile ||= [];
-  p.buffs       ||= {}; // bag for per-turn flags: skipNextDraw, skipNextTurn, extraDrawPerTurn, blockHealTurns, etc.
-}
-
 function normalizeServerState(data) {
   if (!data || typeof data !== 'object') return null;
 
@@ -142,25 +170,39 @@ export function initializePracticeDuel() {
 
 // ------------------------------
 // Basic UI-only helpers
+// (Kept for legacy/local flows; server-driven flows should use duel.js)
 // ------------------------------
 export function drawCard(player) {
   const p = duelState.players[player];
-  if (!p || p.hand.length >= 4 || p.deck.length === 0) return;
-  p.hand.push(p.deck.shift());
+  if (!p || p.hand.length >= MAX_HAND || p.deck.length === 0) return;
+  // normalize deck top to an entry
+  const top = toEntry(p.deck.shift());
+  // hands are face-up; hide only when rendered for opponent
+  top.isFaceDown = false;
+  p.hand.push(top);
   safeRender();
 }
 
 export function playCard(player, index) {
   const p = duelState.players[player];
-  if (!p || !p.hand[index] || p.field.length >= 4) return;
-  p.field.push(p.hand.splice(index, 1)[0]);
+  if (!p || !p.hand[index] || p.field.length >= MAX_FIELD_SLOTS) return;
+
+  // Normalize card and enforce trap facedown on entry
+  const entry = toEntry(p.hand.splice(index, 1)[0]);
+  if (isTrapIdByRange(entry.cardId) && !entry._fired) {
+    entry.isFaceDown = true;
+  } else {
+    entry.isFaceDown = false;
+  }
+
+  p.field.push(entry);
   safeRender();
 }
 
 export function discardCard(player, index) {
   const p = duelState.players[player];
   if (!p || !p.hand[index]) return;
-  const card = p.hand.splice(index, 1)[0];
+  const card = toEntry(p.hand.splice(index, 1)[0]);
   p.discardPile.push(card);
   safeRender();
 }
