@@ -45,6 +45,28 @@
   <!-- ❌ removed spectatorView.js from the duel page -->
   <!-- <script type="module" src="scripts/spectatorView.js" defer></script> -->
 
+  <!-- 🔊 Audio bootstrap (kept minimal; everything else unchanged) -->
+  <script type="module">
+    import { audio, installSoundToggleUI } from './scripts/audio.js';
+
+    // Use a relative path so it works on both Railway and GitHub Pages
+    audio.configure({
+      bgSrc: 'audio/bg/Follow the Trail.mp3',
+      volume: 0.65,
+      bgVolume: 0.35
+    });
+
+    // Set up autoplay unlock listeners and immediately attempt to start
+    audio.initAutoplayUnlock();
+    audio.startBg();
+
+    // Add the top-right sound toggle button (🔊/🔇); CSS already handles z-index
+    installSoundToggleUI();
+
+    // Optional: expose for console debugging
+    window.audio = audio;
+  </script>
+
   <!-- Spectator Styles -->
   <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles" />
 </head>
