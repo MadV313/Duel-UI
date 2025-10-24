@@ -5,20 +5,6 @@
   <title>DayZ CCG Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
 
-  <!-- Small safety styles so overlays never block the sound toggle, and labels look tidy -->
-  <style>
-    .snowfall { pointer-events: none; }
-    #sound-toggle { pointer-events: auto; z-index: 10001; }
-    .zone-label {
-      text-align: center;
-      font: 600 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell;
-      color: #c9d4df;
-      opacity: .85;
-      margin: 6px 0 2px;
-      user-select: none;
-    }
-  </style>
-
   <!-- ✅ Global bootstrap: expose token/api/mode/imgbase to all scripts -->
   <script>
     (function () {
@@ -56,6 +42,8 @@
   <script type="module" src="scripts/coinFlip.js" defer></script>
   <script type="module" src="scripts/duel.js" defer></script>
   <script type="module" src="scripts/buffTracker.js" defer></script>
+  <!-- ❌ removed spectatorView.js from the duel page -->
+  <!-- <script type="module" src="scripts/spectatorView.js" defer></script> -->
 
   <!-- Spectator Styles -->
   <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles" />
@@ -65,11 +53,8 @@
   <!-- ❄️ Snowfall overlay -->
   <div class="snowfall"></div>
 
-  <!-- Labels + Player 2 (Opponent) -->
-  <div class="zone-label" id="label-player2-hand">Opponent Hand</div>
+  <!-- Player 2 (Opponent) -->
   <div id="player2-hand" class="hand hand--top"></div>
-
-  <div class="zone-label" id="label-player2-field">Opponent Field</div>
   <div id="player2-field" class="field"></div>
 
   <!-- HP & Turn Info -->
@@ -80,11 +65,8 @@
   <!-- 👇 hidden until the coin flip completes -->
   <div id="turn-display" class="hidden"></div>
 
-  <!-- Labels + Player 1 (You) -->
-  <div class="zone-label" id="label-player1-field">Your Field</div>
+  <!-- Player 1 (You) -->
   <div id="player1-field" class="field"></div>
-
-  <div class="zone-label" id="label-player1-hand">Your Hand</div>
   <div id="player1-hand" class="hand hand--bottom"></div>
 
   <!-- Controls -->
