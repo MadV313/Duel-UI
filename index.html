@@ -45,25 +45,52 @@
   <!-- ❌ removed spectatorView.js from the duel page -->
   <!-- <script type="module" src="scripts/spectatorView.js" defer></script> -->
 
-  <!-- 🔊 Audio bootstrap (kept minimal; everything else unchanged) -->
+  <!-- 🔊 Audio bootstrap (hardened) -->
   <script type="module">
     import { audio, installSoundToggleUI } from './scripts/audio.js';
 
-    // Use a relative path so it works on both Railway and GitHub Pages
+    // Configure and prep autoplay unlock listeners
     audio.configure({
       bgSrc: 'audio/bg/Follow the Trail.mp3',
       volume: 0.65,
       bgVolume: 0.35
     });
-
-    // Set up autoplay unlock listeners and immediately attempt to start
     audio.initAutoplayUnlock();
+
+    // Try to start immediately (may be blocked until a gesture)
     audio.startBg();
 
-    // Add the top-right sound toggle button (🔊/🔇); CSS already handles z-index
+    // Add 🔊/🔇 button
     installSoundToggleUI();
 
-    // Optional: expose for console debugging
+    // --- Make the button actively kick playback too ---
+    function wireSoundButton() {
+      const btn = document.getElementById('sound-toggle');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        // Ensure an instance exists & (re)start it after the click gesture
+        audio.initAutoplayUnlock();
+        audio.startBg();
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', wireSoundButton, { once: true });
+    } else {
+      wireSoundButton();
+    }
+
+    // First user gesture anywhere → force a start attempt
+    window.addEventListener('pointerdown', () => {
+      audio.initAutoplayUnlock();
+      audio.startBg();
+    }, { once: true, passive: true });
+
+    // Regain-focus retry (Safari/iOS quirk)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) audio.startBg();
+    });
+
+    // Expose for console debugging
     window.audio = audio;
   </script>
 
