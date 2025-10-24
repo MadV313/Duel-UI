@@ -800,11 +800,20 @@ async function botAutoPlayAssist() {
 function isGenericLabel(name, pk) {
   if (!name) return true;
   const s = String(name).trim().toLowerCase();
-  if (s === 'player' || s === 'opponent' || s === 'bot') return true;
-  if (s === `player ${pk === 'player1' ? '1' : '2'}`) return true;
-  if (s === `player${pk === 'player1' ? '1' : '2'}`) return true;
-  // Some backends might send "player one"/"player two"
+
+  // Generic placeholders we should never keep
+  const GENERIC = new Set([
+    'player', 'opponent', 'bot', 'you', 'your', 'self',
+    'challenger', 'enemy', 'foe'
+  ]);
+
+  if (GENERIC.has(s)) return true;
+
+  // "player1", "player 1", "player one" style
+  const n = pk === 'player1' ? '1' : '2';
+  if (s === `player ${n}` || s === `player${n}`) return true;
   if (s === (pk === 'player1' ? 'player one' : 'player two')) return true;
+
   return false;
 }
 function chooseStickyName(pk, incoming) {
