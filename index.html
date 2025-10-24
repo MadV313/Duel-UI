@@ -45,6 +45,28 @@
   <!-- ❌ removed spectatorView.js from the duel page -->
   <!-- <script type="module" src="scripts/spectatorView.js" defer></script> -->
 
+  <!-- 🔊 Audio bootstrap (kept minimal; everything else unchanged) -->
+  <script type="module">
+    import { audio, installSoundToggleUI } from './scripts/audio.js';
+
+    // Use a relative path so it works on both Railway and GitHub Pages
+    audio.configure({
+      bgSrc: 'audio/bg/Follow the Trail.mp3',
+      volume: 0.65,
+      bgVolume: 0.35
+    });
+
+    // Set up autoplay unlock listeners and immediately attempt to start
+    audio.initAutoplayUnlock();
+    audio.startBg();
+
+    // Add the top-right sound toggle button (🔊/🔇); CSS already handles z-index
+    installSoundToggleUI();
+
+    // Optional: expose for console debugging
+    window.audio = audio;
+  </script>
+
   <!-- Spectator Styles -->
   <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles" />
 </head>
@@ -98,22 +120,6 @@
 
   <a href="https://madv313.github.io/HUB-UI/" class="return-to-hub" id="returnToHub">← Return to Hub</a>
 
-  <!-- 🔊 Minimal, self-contained background audio (no module deps) -->
-  <audio
-    id="duel-bgm"
-    src="audio/bg/Follow the Trail.mp3"
-    preload="auto"
-    loop
-    muted
-    playsinline
-  ></audio>
-
-  <!-- Tiny speaker button (re-uses your CSS for #sound-toggle) -->
-  <button id="sound-toggle" type="button" title="Toggle sound"
-    style="position:fixed; right:14px; top:14px; z-index:10001; width:40px;height:40px;border-radius:10px;border:1px solid #2b3946;background:#101820;color:#dfe7ef;cursor:pointer;font-size:18px;">
-    🔇
-  </button>
-
   <!-- Inline Script Bindings -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
@@ -163,56 +169,6 @@
         if (parts.length) a.setAttribute('href', `${base}${sep}${parts.join('&')}`);
       }
     }
-
-    // 🔊 Simple, robust audio bootstrap (no dependency on audio.js)
-    (function initAudio() {
-      const STORE_KEY = 'audio.muted';
-      const a = document.getElementById('duel-bgm');
-      const btn = document.getElementById('sound-toggle');
-      if (!a || !btn) return;
-
-      // Restore preference
-      try {
-        const saved = localStorage.getItem(STORE_KEY);
-        if (saved !== null) a.muted = (saved === 'true');
-      } catch {}
-
-      // reflect in UI
-      const repaint = () => { btn.textContent = a.muted ? '🔇' : '🔊'; };
-
-      // Try to start immediately (will be blocked until a gesture in most browsers)
-      a.play().catch(() => { /* will unlock on first gesture */ });
-      repaint();
-
-      // First gesture anywhere → play; unmute unless user explicitly saved muted=true
-      const unlock = () => {
-        a.play().catch(() => {});
-        try {
-          if (localStorage.getItem(STORE_KEY) !== 'true') {
-            a.muted = false;
-            repaint();
-          }
-        } catch {}
-        window.removeEventListener('pointerdown', unlock, opt);
-        window.removeEventListener('keydown', unlock);
-        document.removeEventListener('visibilitychange', vis);
-      };
-      const opt = { passive: true };
-      window.addEventListener('pointerdown', unlock, opt);
-      window.addEventListener('keydown', unlock);
-
-      // Regain focus retry (iOS/Safari)
-      const vis = () => { if (!document.hidden) a.play().catch(() => {}); };
-      document.addEventListener('visibilitychange', vis);
-
-      // Button toggles mute AND nudges playback so it audibly changes right away
-      btn.addEventListener('click', () => {
-        a.muted = !a.muted;
-        try { localStorage.setItem(STORE_KEY, String(a.muted)); } catch {}
-        repaint();
-        a.play().catch(() => {}); // nudge playback on every click
-      });
-    })();
 
     function init() {
       const urlParams   = new URLSearchParams(window.location.search);
