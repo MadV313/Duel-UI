@@ -47,8 +47,8 @@ function ensurePlayerShape(p) {
 // The single source of truth for the UI
 export const duelState = {
   players: {
-    player1: { hp: 200, hand: [], field: [], deck: [], discardPile: [], buffs: {}, discordName: 'You' },
-    player2: { hp: 200, hand: [], field: [], deck: [], discardPile: [], buffs: {}, discordName: 'Practice Bot' }
+    player1: { hp: 200, hand: [], field: [], deck: [], discardPile: [], buffs: {}, discordName: 'You',          name: 'You' },
+    player2: { hp: 200, hand: [], field: [], deck: [], discardPile: [], buffs: {}, discordName: 'Practice Bot', name: 'Practice Bot' }
   },
   lootPile: [],
   currentPlayer: 'player1',
@@ -89,9 +89,30 @@ function normalizeServerState(data) {
   ensurePlayerShape(data.players.player1);
   ensurePlayerShape(data.players.player2);
 
-  // Friendly labels if missing
-  data.players.player1.discordName ||= data.players.player1.discordName || 'You';
-  data.players.player2.discordName ||= data.players.player2.discordName || 'Practice Bot';
+  // 🔒 Preserve previously known display names if new payload is missing them
+  const prevP1 = duelState?.players?.player1 || {};
+  const prevP2 = duelState?.players?.player2 || {};
+
+  const incomingP1Name =
+    data.players.player1.discordName ||
+    data.players.player1.name ||
+    prevP1.discordName ||
+    prevP1.name ||
+    'You';
+
+  const incomingP2Name =
+    data.players.player2.discordName ||
+    data.players.player2.name ||
+    prevP2.discordName ||
+    prevP2.name ||
+    'Practice Bot';
+
+  // Apply names consistently on both props so any UI using either is safe
+  data.players.player1.discordName = incomingP1Name;
+  data.players.player1.name        = incomingP1Name;
+
+  data.players.player2.discordName = incomingP2Name;
+  data.players.player2.name        = incomingP2Name;
 
   // Preserve/initialize UI flags if not present in payload
   if (typeof data.started !== 'boolean') data.started = duelState.started || false;
@@ -154,8 +175,8 @@ export function initializePracticeDuel() {
   };
 
   duelState.players = {
-    player1: { hp: 200, hand: [], field: [], deck: getRandomCards(), discardPile: [], buffs: {}, discordName: 'You' },
-    player2: { hp: 200, hand: [], field: [], deck: getRandomCards(), discardPile: [], buffs: {}, discordName: 'Practice Bot' },
+    player1: { hp: 200, hand: [], field: [], deck: getRandomCards(), discardPile: [], buffs: {}, discordName: 'You',          name: 'You' },
+    player2: { hp: 200, hand: [], field: [], deck: getRandomCards(), discardPile: [], buffs: {}, discordName: 'Practice Bot', name: 'Practice Bot' },
   };
   duelState.currentPlayer = 'player1';
   duelState.winner = null;
