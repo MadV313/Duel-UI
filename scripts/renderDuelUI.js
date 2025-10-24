@@ -797,9 +797,31 @@ async function botAutoPlayAssist() {
 }
 
 /* ------------------ display helpers ------------------ */
+function isGenericLabel(name, pk) {
+  if (!name) return true;
+  const s = String(name).trim().toLowerCase();
+  if (s === 'player' || s === 'opponent' || s === 'bot') return true;
+  if (s === `player ${pk === 'player1' ? '1' : '2'}`) return true;
+  if (s === `player${pk === 'player1' ? '1' : '2'}`) return true;
+  // Some backends might send "player one"/"player two"
+  if (s === (pk === 'player1' ? 'player one' : 'player two')) return true;
+  return false;
+}
+function chooseStickyName(pk, incoming) {
+  const prev = duelState?.players?.[pk] || {};
+  const fromFetched = fetchedNames[pk] || '';
+  const fromPrev = prev.discordName || prev.name || '';
+  const fallback = pk === 'player2' && !OPP_TOKEN ? 'Practice Bot' : (pk === 'player1' ? 'You' : 'Opponent');
+
+  if (incoming && !isGenericLabel(incoming, pk)) return incoming;
+  if (fromPrev && !isGenericLabel(fromPrev, pk)) return fromPrev;
+  if (fromFetched && !isGenericLabel(fromFetched, pk)) return fromFetched;
+  return fallback;
+}
 function nameOf(playerKey) {
   const p = duelState?.players?.[playerKey] || {};
-  return p.discordName || p.name || (playerKey === 'player2' ? 'Practice Bot' : 'Unknown');
+  const chosen = chooseStickyName(playerKey, p.discordName || p.name || '');
+  return chosen;
 }
 function setTurnText() {
   const el = document.getElementById('turn-display');
@@ -932,6 +954,16 @@ function normalizeStateForServer(state) {
     }
   };
 }
+
+/* ---------- STICKY NAME MERGE FIX (prevents “Player 1” regressions) ---------- */
+function applyStickyNamesToPlayer(pk, P) {
+  // Choose a stable, non-generic display name
+  const incoming = P?.discordName || P?.name || '';
+  const chosen = chooseStickyName(pk, incoming);
+  P.discordName = chosen;
+  P.name = chosen;
+}
+
 function mergeServerIntoUI(server) {
   if (!server || typeof server !== 'object') return;
 
@@ -961,7 +993,11 @@ function mergeServerIntoUI(server) {
 
     if (pk === 'player2') P.hand = P.hand.map(e => ({ ...e, isFaceDown: true }));
 
-    // Preserve resolved names if server lacks them
+    // Preserve/fix names: if server sends generic placeholders,
+    // prefer previously resolved names or token-fetched names.
+    applyStickyNamesToPlayer(pk, P);
+
+    // Safety: if server outright omitted names, use fetchedNames if present
     if (!P.discordName && fetchedNames[pk]) P.discordName = fetchedNames[pk];
     if (!P.name && fetchedNames[pk]) P.name = fetchedNames[pk];
   });
@@ -1231,7 +1267,6 @@ function startTurnDrawIfNeeded() {
   const extra = Number(P.buffs?.extraDrawPerTurn || 0);
   for (let i = 0; i < extra; i++) drawFor('player1');
   if (P.buffs?.blockHealTurns > 0) P.buffs.blockHealTurns--;
-
   duelState._startDrawDoneFor.player1 = true;
 }
 
