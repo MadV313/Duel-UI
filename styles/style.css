@@ -191,6 +191,7 @@ body {
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);  /* dim backdrop */
   z-index: 9999;              /* above everything else */
+  pointer-events: none;       /* avoid intercepting clicks before it’s shown */
 }
 
 .coin-flip-container {
@@ -582,6 +583,13 @@ a.return-to-hub:hover {
 #sound-toggle {
   pointer-events: auto !important;
   z-index: 10001 !important; /* above coin flip (9999) and overlays */
+}
+
+/* Make sure the Start button is always clickable (above overlays) */
+#startPracticeBtn {
+  position: relative;
+  z-index: 10002;
+  pointer-events: auto;
 }
 
 /* Zone labels (used in index.html) */
