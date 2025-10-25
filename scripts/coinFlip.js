@@ -110,6 +110,16 @@ export function flipCoin(forceWinner = null, opts = {}) {
     turnEl.style.removeProperty('display'); // some pages start with display:none
   }
 
+  // ✅ Helper: mark the duel as ready for UI (CSS gates) and notify listeners
+  function markDuelReady() {
+    try {
+      duelState.started = true;
+      document.body.classList.add('duel-ready');
+      // Inform any listeners (if present) that UI can reveal zones/controls
+      window.dispatchEvent(new CustomEvent('duel:ready', { detail: { winner: decided } }));
+    } catch {}
+  }
+
   // Always start with the banner hidden until reveal moment
   if (turnEl) {
     turnEl.classList.add('hidden');
@@ -118,7 +128,10 @@ export function flipCoin(forceWinner = null, opts = {}) {
 
   // If not animating, reveal immediately and (optionally) render, but still return a Promise
   if (!animate) {
-    try { showTurnBanner(); } finally {
+    try {
+      showTurnBanner();
+      markDuelReady();
+    } finally {
       if (renderAfter) renderDuelUI();
       coinFlipInProgress = false;
     }
@@ -179,6 +192,9 @@ export function flipCoin(forceWinner = null, opts = {}) {
           container.style.display = 'none';
           container.style.visibility = 'hidden';
         }
+        // ✅ Flip complete → unlock the duel UI
+        markDuelReady();
+
         if (renderAfter) renderDuelUI();
       } finally {
         coinFlipInProgress = false;
