@@ -3,6 +3,10 @@
 // Works with Spectator UI and (optionally) Duel UI if you include a chat panel there.
 
 (function initSpectatorChat() {
+  // ✅ Prevent double-wiring if this file is imported twice
+  if (window.__CHAT_CLIENT_WIRED__) return;
+  window.__CHAT_CLIENT_WIRED__ = true;
+
   const log   = document.getElementById('chat-log');
   const form  = document.getElementById('chat-form');
   const input = document.getElementById('chat-input');
@@ -12,6 +16,20 @@
 
   // If the page doesn't have chat elements, do nothing.
   if (!log || !form || !input || !send) return;
+
+  // Make sure the chat panel can receive clicks even if other overlays exist
+  try {
+    const panel = document.getElementById('chat-panel');
+    if (panel) {
+      panel.style.pointerEvents = 'auto';
+      panel.style.zIndex = '10005';
+    }
+    form.style.pointerEvents = 'auto';
+    input.style.pointerEvents = 'auto';
+    send.style.pointerEvents  = 'auto';
+    input.removeAttribute('disabled');
+    send.removeAttribute('disabled');
+  } catch {}
 
   // Helpers
   const now = () => Date.now();
@@ -75,12 +93,23 @@
   let lastSendAt = 0;
   const MIN_SEND_GAP_MS = 1600;
 
+  // Tiny burst limiter to avoid accidental spam (helps prevent 429s)
+  let tokens = 2;             // allow a quick double-send at most
+  const MAX_TOKENS = 2;
+  const REFILL_MS = 1200;
+  setInterval(() => { tokens = Math.min(MAX_TOKENS, tokens + 1); }, REFILL_MS);
+
   function sanitizedText() {
-    const t = (input.value || '').replace(/\s+/g, ' ').trim();
+    // Collapse whitespace, limit to 500 chars
+    let t = (input.value || '').replace(/\s+/g, ' ').trim();
+    if (t.length > 500) t = t.slice(0, 500);
     return t;
   }
 
   function canSend() {
+    // If button is disabled, block
+    if (send.disabled) return false;
+
     const t = sanitizedText();
     if (!t) {
       setTyping('Type a message first.');
@@ -89,6 +118,10 @@
     const dt = now() - lastSendAt;
     if (dt < MIN_SEND_GAP_MS) {
       setTyping('You’re sending messages too fast.');
+      return false;
+    }
+    if (tokens <= 0) {
+      setTyping('Slow down a bit.');
       return false;
     }
     return true;
@@ -101,15 +134,19 @@
   async function handleSubmit(ev) {
     if (ev) ev.preventDefault();
 
+    // Guard empty / throttled sends (prevents server 429s on empty)
     if (!canSend()) return;
-    const text = sanitizedText();
 
-    // Local echo (optional). Keep it responsive even if server acks later.
+    const text = sanitizedText();
+    if (!text) return; // double safety
+
+    // Local echo (keeps UI snappy)
     bubble({ who: name, text, self: true });
     input.value = '';
     setTyping('');
     disableSend(true);
     lastSendAt = now();
+    tokens = Math.max(0, tokens - 1);
 
     if (!socket) {
       // No socket? Just re-enable and move on (local echo only).
@@ -145,26 +182,18 @@
     }
   }
 
-  // Wire events
+  // Wire events (defensive: remove any legacy inline handler behavior)
+  try { form.setAttribute('novalidate', 'novalidate'); } catch {}
   form.addEventListener('submit', handleSubmit);
   send.addEventListener('click', handleSubmit);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Submit with Enter; Shift+Enter for newline (if you later use textarea)
+      // Submit with Enter; Shift+Enter would be for textarea (future)
       e.preventDefault();
       handleSubmit(e);
     }
   });
   input.addEventListener('input', () => setTyping(''));
-
-  // Make sure panel is clickable even if a full-screen overlay exists
-  try {
-    const panel = document.getElementById('chat-panel');
-    if (panel) {
-      panel.style.pointerEvents = 'auto';
-      panel.style.zIndex = '6';
-    }
-  } catch {}
 
   // Socket listeners (defensive: all optional)
   if (socket) {
@@ -182,11 +211,23 @@
     socket.on('chat:rate_limited', (ms) => {
       setTyping(`Slow down a bit${ms ? ` (${Math.ceil(Number(ms)/1000)}s)` : ''}.`);
     });
+
+    // Optional: announce new spectators if server emits it
+    socket.on('spectator:joined', (payload) => {
+      try {
+        const evt = new CustomEvent('spectator:user_joined', { detail: { name: payload?.name || 'Spectator' } });
+        window.dispatchEvent(evt);
+      } catch {}
+    });
   }
 
-  // Focus input on click inside panel
-  document.getElementById('chat-panel')?.addEventListener('click', () => {
-    try { input.focus({ preventScroll: true }); } catch {}
+  // Focus input on click inside panel (even if overlays are up)
+  document.getElementById('chat-panel')?.addEventListener('click', (e) => {
+    try {
+      // Don’t let outer overlays swallow the focus intent
+      e.stopPropagation();
+      input.focus({ preventScroll: true });
+    } catch {}
   });
 
   // First paint: keep the send enabled and clear any stale text
