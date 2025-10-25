@@ -606,3 +606,34 @@ a.return-to-hub:hover {
 .hand--no-overlap {
   /* reserved utility class; no-op to avoid layout surprises */
 }
+
+/* === CLICK-THROUGH SAFETY NET (add at end of CSS) === */
+/* Kill click-eating overlays by default */
+.snowfall,
+#coinFlipContainer,
+.animation,
+.overlay {
+  pointer-events: none !important;
+}
+
+/* Chat / hub / audio must always be interactive */
+#chat-panel,
+#chat-panel *,
+.hub-btn,
+.return-to-hub,
+.audio-toggle {
+  pointer-events: auto !important;
+  z-index: 10020; /* above generic overlays */
+}
+
+/* End-of-duel modal: only accept clicks when visible */
+.duel-result        { pointer-events: none !important; }
+.duel-result.show   { pointer-events: auto !important; z-index: 10030; }
+.duel-result__card,
+.duel-result__close { pointer-events: auto !important; cursor: pointer; }
+
+/* Announcement / toasts should never block clicks */
+#announcement,
+.join-toast {
+  pointer-events: none !important;
+}
