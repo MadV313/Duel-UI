@@ -5,6 +5,12 @@
   <title>DayZ CCG Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
 
+  <!-- (Optional) Use an existing local icon to avoid 404s in logs -->
+  <link rel="icon" href="images/cards/000_CardBack_Unique.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/cards/000_CardBack_Unique.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="images/cards/000_CardBack_Unique.png">
+  <link rel="apple-touch-icon" href="images/cards/000_CardBack_Unique.png">
+
   <!-- ✅ Global bootstrap: expose token/api/mode/imgbase to all scripts -->
   <script>
     (function () {
@@ -25,6 +31,9 @@
       console.log('[UI] API_BASE =', API, 'TOKEN set?', !!TOKEN, 'MODE =', MODE, 'IMG_BASE =', IMG_BASE || '(default in renderers)');
     })();
   </script>
+
+  <!-- 🧽 Net hygiene: install global fetch/backoff guards BEFORE any network-using scripts -->
+  <script src="scripts/net-hygiene.js" defer></script>
 
   <!-- Duel Loader (for Discord-initiated PvP matches) -->
   <script type="module" src="scripts/duelLoader.js" defer></script>
