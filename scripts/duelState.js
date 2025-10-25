@@ -235,6 +235,7 @@ export function endTurn() {
   safeRender();
 }
 
+// ⚡ Updated: show duel result immediately when HP hits 0
 export function updateHP(player, amount) {
   const p = duelState.players[player];
   p.hp += amount;
@@ -242,26 +243,16 @@ export function updateHP(player, amount) {
     p.hp = 0;
     duelState.winner = player === 'player1' ? 'player2' : 'player1';
 
-    // 🔔 Immediately announce game over (no need to wait for End Turn)
+    // 🔔 Notify listeners (e.g., UI overlay) immediately
     try {
-      const p1 = duelState.players.player1?.discordName || 'Player 1';
-      const p2 = duelState.players.player2?.discordName || 'Player 2';
-      const winnerName = duelState.winner === 'player1' ? p1 : p2;
-
-      // Notify any listeners (duel UI or spectator)
-      document.dispatchEvent(new CustomEvent('duel:game_over', {
-        detail: { winner: duelState.winner, winnerName, reason: 'HP reached 0' }
+      window.dispatchEvent(new CustomEvent('duel:result', {
+        detail: { winner: duelState.winner, reason: 'HP reached 0' }
       }));
+    } catch {}
 
-      // Optional in-page toast if #announcement exists (duel UI)
-      const overlay = document.getElementById('announcement');
-      if (overlay) {
-        overlay.textContent = `🏁 ${winnerName} wins!`;
-        overlay.classList.remove('hidden');
-        overlay.style.removeProperty('display');
-        setTimeout(() => overlay.classList.add('hidden'), 2500);
-      }
-    } catch { /* non-fatal */ }
+    // Render NOW so the result appears without waiting for End Turn
+    safeRender();
+    return;
   }
   safeRender();
 }
