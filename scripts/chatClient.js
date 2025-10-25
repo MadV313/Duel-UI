@@ -22,13 +22,15 @@
     const panel = document.getElementById('chat-panel');
     if (panel) {
       panel.style.pointerEvents = 'auto';
-      panel.style.zIndex = '10005';
+      panel.style.zIndex = '10020'; // ensure above generic overlays
     }
     form.style.pointerEvents = 'auto';
     input.style.pointerEvents = 'auto';
     send.style.pointerEvents  = 'auto';
     input.removeAttribute('disabled');
     send.removeAttribute('disabled');
+    // Ensure the button never navigates/reloads
+    send.setAttribute('type', 'button');
   } catch {}
 
   // Helpers
@@ -50,7 +52,16 @@
   let socket = null;
   if (window.io && typeof window.io === 'function') {
     try {
-      socket = window.io(socketOrigin, { path: '/socket.io', transports: ['websocket'] });
+      socket = window.io(socketOrigin, {
+        path: '/socket.io',
+        transports: ['websocket'],
+        // Gentle reconnection to avoid HTTP 429s / spammy bursts
+        reconnection: true,
+        reconnectionAttempts: 6,
+        reconnectionDelay: 800,
+        reconnectionDelayMax: 4000,
+        timeout: 5000,
+      });
     } catch (e) {
       console.warn('[chat] socket init failed:', e);
     }
@@ -132,7 +143,7 @@
   }
 
   async function handleSubmit(ev) {
-    if (ev) ev.preventDefault();
+    if (ev) { ev.preventDefault(); ev.stopPropagation?.(); }
 
     // Guard empty / throttled sends (prevents server 429s on empty)
     if (!canSend()) return;
