@@ -10,9 +10,9 @@ const DEFAULTS = {
 };
 
 const store = {
-  muted: JSON.parse(localStorage.getItem('audio.muted') || 'false'),
-  volume: Number(localStorage.getItem('audio.vol') || DEFAULTS.volume),
-  bgVolume: Number(localStorage.getItem('audio.bgvol') || DEFAULTS.bgVolume),
+  muted: (() => { try { return JSON.parse(localStorage.getItem('audio.muted') || 'false'); } catch { return false; } })(),
+  volume: (() => { try { return Number(localStorage.getItem('audio.vol') || DEFAULTS.volume); } catch { return DEFAULTS.volume; } })(),
+  bgVolume: (() => { try { return Number(localStorage.getItem('audio.bgvol') || DEFAULTS.bgVolume); } catch { return DEFAULTS.bgVolume; } })(),
   unlocked: false,
   _unlockInstalled: false,
   debug: false,
@@ -87,6 +87,7 @@ function installUnlockOnce() {
     store.unlocked = true;
     if (!bgAudio) makeBg(DEFAULTS.bgSrc);
     try { await bgAudio.play(); } catch {}
+    // resolve all waiters
     while (unlockWaiters.length) {
       try { unlockWaiters.shift()?.(); } catch {}
     }
@@ -424,19 +425,25 @@ export const audio = {
 
   setMuted(m) {
     store.muted = !!m;
-    localStorage.setItem('audio.muted', JSON.stringify(store.muted));
+    try { localStorage.setItem('audio.muted', JSON.stringify(store.muted)); } catch {}
     if (bgAudio) bgAudio.muted = store.muted;
   },
   toggleMute() { this.setMuted(!store.muted); },
+  isMuted() { return !!store.muted; },
+
   setVolume(v) {
     store.volume = Math.max(0, Math.min(1, Number(v)));
-    localStorage.setItem('audio.vol', String(store.volume));
+    try { localStorage.setItem('audio.vol', String(store.volume)); } catch {}
   },
+  getVolume() { return store.volume; },
+
   setBgVolume(v) {
     store.bgVolume = Math.max(0, Math.min(1, Number(v)));
-    localStorage.setItem('audio.bgvol', String(store.bgVolume));
+    try { localStorage.setItem('audio.bgvol', String(store.bgVolume)); } catch {}
     if (bgAudio) bgAudio.volume = store.bgVolume;
   },
+  getBgVolume() { return store.bgVolume; },
+
   setDebug(on) { store.debug = !!on; },
 };
 
