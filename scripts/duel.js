@@ -5,6 +5,7 @@ import { applyStartTurnBuffs } from './buffTracker.js';
 import { triggerAnimation } from './animations.js';
 import allCards from './allCards.js';
 import { audio } from './audio.js';
+import { NET_LIMITS } from './net-hygiene.js'; // 👈 visibility-aware cadence
 
 // --- Config (UI guards)
 const MAX_FIELD_SLOTS = 3;
@@ -632,14 +633,23 @@ function renderDuelUI() {
   duelState._lastActivePlayer = duelState.currentPlayer || null;
 }
 
-/** Safety net: poll in case updates arrive between our own renders. */
-setInterval(() => {
-  try {
-    resolveUnresolvedNonTrapsOnceFor('player2');
-  } catch (e) {
-    // no-op
-  }
-}, 250);
+/** Safety net: visibility-aware poll so updates get applied without hammering the CPU/network. */
+let _resolveTimer = null;
+(function installResolvePoller(){
+  const POLL_MS = NET_LIMITS?.DUEL_RESOLVE_POLL_MS ?? 1000; // was 250ms; safer default 1000ms
+  const tick = () => {
+    if (document.hidden) return; // pause when tab not visible
+    try { resolveUnresolvedNonTrapsOnceFor('player2'); } catch {}
+  };
+  if (_resolveTimer) clearInterval(_resolveTimer);
+  _resolveTimer = setInterval(tick, POLL_MS);
+  // quick catch-up when resuming visibility
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      setTimeout(tick, NET_LIMITS?.VISIBILITY_RESUME_DELAY_MS ?? 200);
+    }
+  });
+})();
 
 /* ---------- start-of-turn auto draw (once per turn) ---------- */
 export function startTurnIfNeeded() {
