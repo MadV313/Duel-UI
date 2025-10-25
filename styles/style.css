@@ -608,6 +608,7 @@ a.return-to-hub:hover {
 }
 
 /* === CLICK-THROUGH SAFETY NET (add at end of CSS) === */
+
 /* Kill click-eating overlays by default */
 .snowfall,
 #coinFlipContainer,
