@@ -241,6 +241,27 @@ export function updateHP(player, amount) {
   if (p.hp <= 0) {
     p.hp = 0;
     duelState.winner = player === 'player1' ? 'player2' : 'player1';
+
+    // 🔔 Immediately announce game over (no need to wait for End Turn)
+    try {
+      const p1 = duelState.players.player1?.discordName || 'Player 1';
+      const p2 = duelState.players.player2?.discordName || 'Player 2';
+      const winnerName = duelState.winner === 'player1' ? p1 : p2;
+
+      // Notify any listeners (duel UI or spectator)
+      document.dispatchEvent(new CustomEvent('duel:game_over', {
+        detail: { winner: duelState.winner, winnerName, reason: 'HP reached 0' }
+      }));
+
+      // Optional in-page toast if #announcement exists (duel UI)
+      const overlay = document.getElementById('announcement');
+      if (overlay) {
+        overlay.textContent = `🏁 ${winnerName} wins!`;
+        overlay.classList.remove('hidden');
+        overlay.style.removeProperty('display');
+        setTimeout(() => overlay.classList.add('hidden'), 2500);
+      }
+    } catch { /* non-fatal */ }
   }
   safeRender();
 }
