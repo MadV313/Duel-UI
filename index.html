@@ -51,7 +51,8 @@
   <script type="module" src="scripts/coinFlip.js" defer></script>
   <script type="module" src="scripts/duel.js" defer></script>
   <script type="module" src="scripts/buffTracker.js" defer></script>
-  <!-- ❌ spectator view lives in a separate repo now; no spectator script/CSS here -->
+  <!-- ❌ removed spectatorView.js from the duel page -->
+  <!-- <script type="module" src="scripts/spectatorView.js" defer></script> -->
 
   <!-- 🔊 Audio bootstrap (kept minimal; everything else unchanged) -->
   <script type="module">
@@ -74,6 +75,9 @@
     // Optional: expose for console debugging
     window.audio = audio;
   </script>
+
+  <!-- Spectator Styles -->
+  <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles" />
 </head>
 
 <body>
@@ -128,6 +132,7 @@
   <!-- Inline Script Bindings -->
   <script type="module">
     import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
+    import { renderSpectatorView } from './scripts/spectatorView.js';
     import { drawCard, endTurn } from './scripts/duel.js';
 
     // Expose bits used by inline onclicks / other scripts
@@ -176,12 +181,24 @@
 
     function init() {
       const urlParams   = new URLSearchParams(window.location.search);
+      const isSpectator = urlParams.get('spectator') === 'true';
       const isMock      = urlParams.get('mock') === 'true';
 
       rewriteReturnToHub();
 
+      if (isSpectator) {
+        renderSpectatorView();
+        const controls = $('controls');
+        if (controls) controls.style.display = 'none';
+        const spec = $('spectatorStyles');
+        if (spec) spec.disabled = false;
+      } else {
+        const spec = $('spectatorStyles');
+        if (spec) spec.disabled = true;
+      }
+
       // Only the Start button should be visible before coin flip (unless mock mode)
-      if (!isMock) hideUntilFlip();
+      if (!isSpectator && !isMock) hideUntilFlip();
 
       if (isMock) {
         $('controls').style.display = 'flex';
