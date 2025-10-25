@@ -3,8 +3,26 @@ import allCards from './allCards.js';
 
 /* Helpers */
 const ID_BACK = '000';
-const CARD_BACK_SRC = 'images/cards/000_CardBack_Unique.png';
-const imgPath = (img) => `images/cards/${img}`;
+
+// Respect a dynamic image base if provided (falls back to /images/cards)
+const IMG_BASE = (() => {
+  try {
+    const base = (window.IMG_BASE || 'images/cards') + '';
+    return base.replace(/\/+$/, '');
+  } catch {
+    return 'images/cards';
+  }
+})();
+
+// Build paths safely (no double slashes)
+const imgPath = (img) => {
+  if (!img) return `${IMG_BASE}/000_CardBack_Unique.png`;
+  // If an absolute or root path is provided in metadata, use it as-is
+  if (/^([a-z]+:)?\/\//i.test(img) || img.startsWith('/')) return img;
+  return `${IMG_BASE}/${img}`;
+};
+
+const CARD_BACK_SRC = `${IMG_BASE}/000_CardBack_Unique.png`;
 
 // Normalize "tags" to an array (JSON sometimes has comma-strings)
 function toTags(val) {
