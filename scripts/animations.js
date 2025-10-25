@@ -42,16 +42,19 @@ function normalizeTags(tags) {
 // (CSS for the classes is assumed to exist in your styles)
 // ———————————————————————————————————————————
 function triggerAnimation(type) {
+  // Normalize new callers: map a generic "turn" cue to the existing "combo" flash.
+  const t = type === 'turn' ? 'combo' : type;
+
   const el = document.createElement('div');
-  el.classList.add('animation', type);
+  el.classList.add('animation', t);
   document.body.appendChild(el);
 
   // Tunable durations per type
   let duration = 1000;
-  if (type === 'combo') duration = 1400;
-  if (type === 'shield') duration = 1200;
-  if (type === 'trap') duration = 1200;
-  if (type === 'bullet') duration = 600;
+  if (t === 'combo') duration = 1400;
+  if (t === 'shield') duration = 1200;
+  if (t === 'trap') duration = 1200;
+  if (t === 'bullet') duration = 600;
 
   // Clean up after the effect finishes
   setTimeout(() => el.remove(), duration);
@@ -102,5 +105,6 @@ function triggerAnimationByCard(cardId) {
 // triggerAnimation('shield');     // Defense/block flash
 // triggerAnimation('trap');       // Trap trigger shake
 // triggerAnimation('combo');      // Golden combo glow
+// triggerAnimation('turn');       // (normalized to "combo")
 
 export { triggerAnimation, triggerAnimationByCard };
