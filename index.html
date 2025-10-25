@@ -150,8 +150,8 @@
       const fields = ['player1-field','player2-field'];
       hands.forEach(id => hide($(id)));
       fields.forEach(id => hide($(id)));
-      hide($('drawBtn'));
-      hide($('endTurnBtn'));
+      hide($( 'drawBtn'));
+      hide($( 'endTurnBtn'));
 
       // keep the banner hidden via class only (coinFlip will remove it)
       const turn = $('turn-display');
@@ -239,6 +239,21 @@
     } else {
       init();
     }
+  </script>
+
+  <!-- Emergency: make sure no overlay is eating clicks -->
+  <script>
+    (function unblockClicks() {
+      try {
+        const ids = ['coinFlipContainer', 'announcement'];
+        ids.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.pointerEvents = 'none';
+        });
+        const snow = document.querySelector('.snowfall');
+        if (snow) snow.style.pointerEvents = 'none';
+      } catch {}
+    })();
   </script>
 </body>
 </html>
