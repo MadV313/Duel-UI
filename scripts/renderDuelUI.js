@@ -4,6 +4,7 @@ import { renderField } from './renderField.js';
 import { duelState } from './duelState.js';
 import { API_BASE, UI_BASE } from './config.js';
 import { audio, installSoundToggleUI } from './audio.js';
+import { NET_LIMITS } from './net-hygiene.js';
 
 /* ---------------- constants ---------------- */
 const MAX_HP = 200;
@@ -1070,13 +1071,14 @@ function apiBase() {
 }
 let _syncTimer = null;
 let _lastSent = '';
-let _syncBackoffMs = 350; // adaptive debounce
+let _syncBackoffMs = Math.max( (NET_LIMITS?.SYNC_START_MS ?? 1200), 1200 ); // safer initial debounce
 let _syncCooldownUntil = 0;
 
 async function syncToServer() {
   const base = apiBase();
   if (!base) return;
   if (isSpectator) return; // spectators should not push state
+  if (document.hidden) return; // skip background tabs
   if (Date.now() < _syncCooldownUntil) return;
 
   try {
@@ -1096,21 +1098,26 @@ async function syncToServer() {
       console.warn('[UI] sync failed', res.status, t);
 
       if (res.status === 429) {
-        // basic backoff
+        // aggressive backoff on 429
         _syncBackoffMs = Math.min(_syncBackoffMs * 2, 8000);
         _syncCooldownUntil = Date.now() + _syncBackoffMs;
       }
     } else {
-      // decay backoff on success
-      _syncBackoffMs = Math.max(250, Math.floor(_syncBackoffMs * 0.8));
+      // decay backoff on success, but keep a healthy floor
+      const floor = 800;
+      _syncBackoffMs = Math.max(floor, Math.floor(_syncBackoffMs * 0.8));
     }
   } catch (e) {
     console.warn('[UI] sync error', e);
   }
 }
 function scheduleSync(delay = _syncBackoffMs) {
-  if (_syncTimer) clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(syncToServer, delay);
+  if (document.hidden) return;        // don't schedule when hidden
+  if (_syncTimer) return;             // don't keep pushing the timer out
+  _syncTimer = setTimeout(() => {
+    _syncTimer = null;
+    syncToServer();
+  }, delay);
 }
 
 /* ---------------- bot turn driver ----------------- */
@@ -1480,6 +1487,7 @@ let spectatorsTimer = null;
 async function pollSpectators() {
   // Only in spectator view with an API and a duel id
   if (!isSpectator || !(API_OVERRIDE || API_BASE) || !DUEL_ID) return;
+  if (document.hidden) return; // pause in background
 
   const base = API_OVERRIDE || API_BASE;
   const candidates = [
@@ -1510,8 +1518,20 @@ function beginSpectatorsLoop() {
   if (!isSpectator) return;
   ensureSpectatorsBar();
   if (spectatorsTimer) clearInterval(spectatorsTimer);
-  spectatorsTimer = setInterval(pollSpectators, 5000);
-  pollSpectators().catch(()=>{});
+
+  const tick = () => { pollSpectators().catch(()=>{}); };
+
+  // run every 10s (visibility-aware via pollSpectators)
+  spectatorsTimer = setInterval(tick, 10000);
+  // immediate first run
+  tick();
+
+  // catch-up on visibility resume
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      setTimeout(() => pollSpectators().catch(()=>{}), NET_LIMITS?.VISIBILITY_RESUME_DELAY_MS ?? 200);
+    }
+  });
 }
 
 /* ------------------ main render ------------------ */
@@ -1597,3 +1617,12 @@ export async function renderDuelUI(root) {
     void maybeRunBotTurn();
   }
 }
+
+/* ---------- Visibility: one-shot catch-up for sync ---------- */
+(function installVisibilityCatchup(){
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      setTimeout(() => { try { scheduleSync(0); } catch {} }, NET_LIMITS?.VISIBILITY_RESUME_DELAY_MS ?? 200);
+    }
+  });
+})();
