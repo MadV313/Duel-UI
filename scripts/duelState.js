@@ -44,6 +44,38 @@ function ensurePlayerShape(p) {
   p.buffs       ||= {}; // bag for per-turn flags: skipNextDraw, skipNextTurn, extraDrawPerTurn, blockHealTurns, etc.
 }
 
+// --- Single-flight network helper (prevents 429 bursts on result announce) ---
+async function postJSONOnce(url, body, opts = {}) {
+  // Memoize by URL so multiple callers don’t spam the endpoint.
+  postJSONOnce._inflight ??= new Map();
+  if (postJSONOnce._inflight.has(url)) {
+    return postJSONOnce._inflight.get(url);
+  }
+  const task = (async () => {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+        body: JSON.stringify(body),
+      });
+      // Treat 2xx/409/429 as “handled” — don’t retry; UI already shows winner locally.
+      if (res.ok || res.status === 409 || res.status === 429) {
+        return true;
+      }
+      console.warn('[duelState] result announce non-OK:', res.status, await res.text().catch(()=>'' ));
+      return false;
+    } catch (e) {
+      console.warn('[duelState] result announce failed:', e);
+      return false;
+    } finally {
+      // Clear memo after a short delay so future *new* matches can announce again.
+      setTimeout(() => postJSONOnce._inflight.delete(url), 4000);
+    }
+  })();
+  postJSONOnce._inflight.set(url, task);
+  return task;
+}
+
 // The single source of truth for the UI
 export const duelState = {
   players: {
@@ -53,7 +85,7 @@ export const duelState = {
   lootPile: [],
   currentPlayer: 'player1',
   winner: null,
-  summarySaved: false,
+  summarySaved: false, // ⬅️ used to ensure we announce once
 
   // 🔒 UI gates & turn-start bookkeeping
   started: false, // becomes true after coin flip completes
@@ -183,6 +215,7 @@ export function initializePracticeDuel() {
 
   // Reset UI flags for a clean start
   duelState.started = false;
+  duelState.summarySaved = false;
   duelState._startDrawDoneFor = { player1: false, player2: false };
 
   console.log('🧪 Practice duel initialized locally with random cards.');
@@ -235,7 +268,6 @@ export function endTurn() {
   safeRender();
 }
 
-// ⚡ Updated: show duel result immediately when HP hits 0
 export function updateHP(player, amount) {
   const p = duelState.players[player];
   p.hp += amount;
@@ -243,16 +275,67 @@ export function updateHP(player, amount) {
     p.hp = 0;
     duelState.winner = player === 'player1' ? 'player2' : 'player1';
 
-    // 🔔 Notify listeners (e.g., UI overlay) immediately
+    // 🔔 Immediately announce game over in-page (no network dependency)
     try {
-      window.dispatchEvent(new CustomEvent('duel:result', {
-        detail: { winner: duelState.winner, reason: 'HP reached 0' }
-      }));
-    } catch {}
+      const p1 = duelState.players.player1?.discordName || 'Player 1';
+      const p2 = duelState.players.player2?.discordName || 'Player 2';
+      const winnerName = duelState.winner === 'player1' ? p1 : p2;
 
-    // Render NOW so the result appears without waiting for End Turn
-    safeRender();
-    return;
+      // Notify any listeners (duel UI or spectator)
+      document.dispatchEvent(new CustomEvent('duel:game_over', {
+        detail: { winner: duelState.winner, winnerName, reason: 'HP reached 0' }
+      }));
+
+      // Also broadcast to any window listeners (spectator page)
+      try {
+        window.dispatchEvent?.(new CustomEvent('spectator:duel_result', {
+          detail: { winner: winnerName, reason: 'HP reached 0' }
+        }));
+      } catch {}
+
+      // Optional in-page toast if #announcement exists (duel UI)
+      const overlay = document.getElementById('announcement');
+      if (overlay) {
+        overlay.textContent = `🏁 ${winnerName} wins!`;
+        overlay.classList.remove('hidden');
+        overlay.style.removeProperty('display');
+        setTimeout(() => overlay.classList.add('hidden'), 2500);
+      }
+    } catch { /* non-fatal */ }
+
+    // 🔐 Server summary POST — single-flight and tolerant to 429/409.
+    if (!duelState.summarySaved) {
+      duelState.summarySaved = true; // prevent duplicate attempts from multiple callers
+      const payload = buildSummaryPayload();
+      postJSONOnce(apiUrl('/duel/summary'), payload)
+        .then(ok => { if (!ok) console.warn('[duelState] summary not confirmed (proceeding offline).'); })
+        .catch(()=>{});
+    }
   }
   safeRender();
+}
+
+function buildSummaryPayload() {
+  const p1 = duelState.players.player1 || {};
+  const p2 = duelState.players.player2 || {};
+  const winner = duelState.winner;
+  const winnerName = winner === 'player1'
+    ? (p1.discordName || p1.name || 'Player 1')
+    : (p2.discordName || p2.name || 'Player 2');
+
+  return {
+    winner,
+    winnerName,
+    reason: 'HP reached 0',
+    snapshot: {
+      player1: {
+        hp: p1.hp, hand: p1.hand?.length || 0, field: p1.field?.map(c=>c.cardId) || [],
+        deck: p1.deck?.length || 0, discard: p1.discardPile?.length || 0, name: p1.discordName || p1.name || 'P1'
+      },
+      player2: {
+        hp: p2.hp, hand: p2.hand?.length || 0, field: p2.field?.map(c=>c.cardId) || [],
+        deck: p2.deck?.length || 0, discard: p2.discardPile?.length || 0, name: p2.discordName || p2.name || 'P2'
+      }
+    }
+  };
 }
