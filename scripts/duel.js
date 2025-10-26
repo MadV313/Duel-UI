@@ -85,7 +85,43 @@ function _playHitOncePerTurnFor(defenderKey) {
   try { audio.play('attack_hit.mp3'); } catch {}
 }
 
-/** Track damage taken this turn; clamp HP (0–MAX_HP), obey block-heal */
+/* ---------- winner announcement helper (UI-only) ---------- */
+function announceWinnerIfNeeded(reason = 'HP reached 0') {
+  if (!duelState.winner || duelState._winnerAnnounced) return;
+
+  duelState._winnerAnnounced = true;
+  const p1 = duelState.players.player1?.name || 'Player 1';
+  const p2 = duelState.players.player2?.name || 'Player 2';
+  const winnerName = duelState.winner === 'player1' ? p1 : p2;
+
+  // Notify any in-app listeners (e.g., spectator UI bridge)
+  try {
+    window.dispatchEvent(new CustomEvent('spectator:duel_result', {
+      detail: {
+        winner: duelState.winner,
+        winnerName,
+        reason,
+        players: {
+          player1: { ...duelState.players.player1 },
+          player2: { ...duelState.players.player2 }
+        }
+      }
+    }));
+  } catch {}
+
+  // Optional toast if an announcement element exists in this UI
+  try {
+    const overlay = document.getElementById('announcement');
+    if (overlay) {
+      overlay.textContent = `🏁 ${winnerName} wins!`;
+      overlay.classList.remove('hidden');
+      overlay.style.removeProperty('display');
+      setTimeout(() => overlay.classList.add('hidden'), 2500);
+    }
+  } catch {}
+}
+
+/** Track damage taken this turn; clamp HP (0–MAX_HP), obey block-heal; declare winner at 0 */
 function changeHP(playerKey, delta) {
   const p = duelState.players[playerKey];
   if (!p) return;
@@ -104,6 +140,12 @@ function changeHP(playerKey, delta) {
 
   const next = Math.max(0, Math.min(MAX_HP, Number(p.hp ?? 0) + Number(delta)));
   p.hp = next;
+
+  // If someone hits 0 here (UI-only path), set winner & announce once (prevents any late fetch spam elsewhere)
+  if (next <= 0 && !duelState.winner) {
+    duelState.winner = playerKey === 'player1' ? 'player2' : 'player1';
+    announceWinnerIfNeeded('HP reached 0');
+  }
 }
 
 /* ---------- deck helpers (category draws) ---------- */
@@ -631,6 +673,9 @@ function renderDuelUI() {
 
   // track current active for next boundary check
   duelState._lastActivePlayer = duelState.currentPlayer || null;
+
+  // If winner has been chosen elsewhere, announce once
+  announceWinnerIfNeeded('Game finished');
 }
 
 /** Safety net: visibility-aware poll so updates get applied without hammering the CPU/network. */
@@ -673,6 +718,7 @@ export function startTurnIfNeeded() {
     if (noHand && noDeck) {
       const foe = active === 'player1' ? 'player2' : 'player1';
       duelState.winner = foe;
+      announceWinnerIfNeeded('No cards to draw or play');
       renderDuelUI(); // summary overlay path in renderDuelUI
       return true;
     }
