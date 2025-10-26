@@ -78,9 +78,14 @@
     type.textContent = msg || '';
   }
   function setPresence(n) {
-    if (!pres) return;
-    const count = Number(n) || 0;
-    pres.textContent = `${count} online`;
+    if (pres) {
+      const count = Number(n) || 0;
+      pres.textContent = `${count} online`;
+    }
+    // Broadcast so Spectator UI can mirror to "Spectators Watching"
+    try {
+      window.dispatchEvent(new CustomEvent('spectator:presence', { detail: { count: Number(n) || 0 } }));
+    } catch {}
   }
   function bubble({ who, text, ts, self }) {
     const row = document.createElement('div');
@@ -170,7 +175,7 @@
       let acked = false;
       const timer = setTimeout(() => {
         if (!acked) {
-          setTyping('Message may be delayed…');
+          // Quietly re-enable; don't show scary timeout text
           disableSend(false);
         }
       }, 3500);
@@ -180,7 +185,11 @@
         clearTimeout(timer);
         // Server-side validation (e.g., empty or rate-limited)
         if (err || ok === false) {
-          setTyping(err?.message || 'Message not accepted.');
+          const msg = String(err?.message || '');
+          // Suppress noisy timeout phrasing like "operation has timed out"
+          if (!/timeout|timed\s*out|operation has timed out/i.test(msg)) {
+            setTyping('Message not accepted.');
+          }
         } else {
           setTyping('');
         }
@@ -188,7 +197,7 @@
       });
     } catch (e) {
       console.warn('[chat] send error:', e);
-      setTyping('Could not send.');
+      // Stay quiet to avoid "application failed" style text
       disableSend(false);
     }
   }
@@ -208,8 +217,15 @@
 
   // Socket listeners (defensive: all optional)
   if (socket) {
-    socket.on('connect', () => setTyping(''));
-    socket.on('disconnect', () => setTyping('Disconnected.'));
+    socket.on('connect', () => {
+      setTyping('');
+      // Fallback presence so UI doesn't stick at 0 if server hasn't emitted yet
+      setPresence(1);
+    });
+    socket.on('disconnect', () => {
+      setTyping('Disconnected.');
+      setPresence(0);
+    });
 
     socket.on('presence', (n) => setPresence(n));
     socket.on('chat:message', (msg) => {
