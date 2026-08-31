@@ -32,7 +32,6 @@
   "winner": null,
   "summarySaved": false,
 
-  /* Optional legacy/debug fields kept from your original file */
   "log": [],
   "turn": 1
 }
