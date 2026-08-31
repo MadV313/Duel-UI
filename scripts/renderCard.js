@@ -15,14 +15,16 @@ const IMG_BASE = (() => {
 })();
 
 // Build paths safely (no double slashes)
+const canonicalBack = allCards.find(card => card?.card_id === ID_BACK)?.image || '000_WinterlandDeathDeck_Back.png';
+
 const imgPath = (img) => {
-  if (!img) return `${IMG_BASE}/000_CardBack_Unique.png`;
+  if (!img) return `${IMG_BASE}/${canonicalBack}`;
   // If an absolute or root path is provided in metadata, use it as-is
   if (/^([a-z]+:)?\/\//i.test(img) || img.startsWith('/')) return img;
   return `${IMG_BASE}/${img}`;
 };
 
-const CARD_BACK_SRC = `${IMG_BASE}/000_CardBack_Unique.png`;
+const CARD_BACK_SRC = imgPath(canonicalBack);
 
 // Normalize "tags" to an array (JSON sometimes has comma-strings)
 function toTags(val) {

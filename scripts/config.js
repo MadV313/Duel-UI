@@ -1,115 +1,75 @@
-// scripts/config.js
-// Centralized client config + sane API base detection.
-// Prefers the UI’s reverse-proxy (/api → backend) but still honors ?api= overrides.
-// Non-breaking: adds HUB_BASE + PLAYER_TOKEN helpers while preserving existing exports/behavior.
+// scripts/config.js — canonical production configuration for the session-backed Duel UI.
+// Production identity is carried only by ?session=<id>&token=<viewer>.
 
-const qs = new URLSearchParams(location.search);
+const qs = new URLSearchParams(window.location.search);
 
-/* ---------------- API base ----------------
- * Priority:
- *  1) window.API_BASE (set by index.html bootstrap)
- *  2) ?api=... (can be absolute or relative)
- *  3) '/api' fallback (works with our UI proxy)
- *
- * We only trim a single trailing slash; we do NOT force-append '/api' here
- * to keep compatibility with callers that already provide a full base.
- */
-const _rawApiBase =
-  (typeof window !== 'undefined' && window.API_BASE) ||
-  qs.get('api') ||
-  (location.hostname === 'localhost' ? 'http://localhost:3000' : '/api');
-
-export const API_BASE = String(_rawApiBase).replace(/\/+$/, '');
-
-// Also expose globally so non-ESM inline code can use it if needed
-if (typeof window !== 'undefined') {
-  window.API_BASE = API_BASE;
+function trimBase(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
 }
 
-/* ---------------- UI base (for deep links) ---------------- */
-export const UI_BASE =
-  qs.get('ui') ||
-  (typeof window !== 'undefined' && window.DUEL_UI_URL) ||
-  location.origin;
-
-/* ---------------- Optional Hub base (used by return-to-hub links) ---------------- */
-export const HUB_BASE =
-  qs.get('hub') ||
-  (typeof window !== 'undefined' && window.HUB_UI_URL) ||
-  'https://madv313.github.io/HUB-UI';
-
-/* ---------------- Token handling (optional) ----------------
- * Provide a common way to read/write the player token used by multiple screens.
- * This does NOT initiate any network request by itself.
- */
-export const PLAYER_TOKEN = (() => {
-  const fromQs = qs.get('token') || '';
-  if (fromQs) {
-    try { localStorage.setItem('sv13.token', fromQs); } catch {}
-    return fromQs;
+function validAbsoluteHttp(value) {
+  try {
+    const u = new URL(String(value || ''));
+    return /^https?:$/.test(u.protocol) ? trimBase(u.toString()) : '';
+  } catch {
+    return '';
   }
-  try { return localStorage.getItem('sv13.token') || ''; } catch { return ''; }
-})();
-
-if (typeof window !== 'undefined') {
-  window.PLAYER_TOKEN = PLAYER_TOKEN;
 }
 
-/* ---------------- Gameplay & UI defaults ---------------- */
-export const CONFIG = {
-  mode: qs.get('mode') || 'practice',
-  spectator: qs.get('spectator') === 'true',
-  mock: qs.get('mock') === 'true',
+const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+// Production is pinned to the canonical API. The ?api= override is accepted only
+// while the UI itself is running locally, so a crafted production link cannot
+// redirect private duel credentials to an arbitrary origin.
+const devApi = isLocal ? validAbsoluteHttp(qs.get('api')) : '';
 
-  // Core duel config
-  startHP: 200,
-  handLimit: 4,
-  coinFlipDurationMs: 1500,
+export const API_BASE = devApi || (isLocal ? 'http://localhost:3000' : 'https://api.sv13tcg.com');
+export const UI_BASE = 'https://duel.sv13tcg.com';
+export const HUB_BASE = 'https://sv13tcg.com';
+export const SUMMARY_BASE = 'https://summary.sv13tcg.com';
+export const SPECTATOR_BASE = 'https://spectate.sv13tcg.com';
+export const SESSION_ID = String(qs.get('session') || '').trim();
+export const PLAYER_TOKEN = String(qs.get('token') || '').trim();
+export const MOCK_MODE = qs.get('mock') === '1' || qs.get('mock') === 'true';
 
-  // Endpoints
+export const CONFIG = Object.freeze({
   apiBase: API_BASE,
   uiBase: UI_BASE,
   hubBase: HUB_BASE,
-};
+  summaryBase: SUMMARY_BASE,
+  spectatorBase: SPECTATOR_BASE,
+  sessionId: SESSION_ID,
+  playerToken: PLAYER_TOKEN,
+  mock: MOCK_MODE,
+  pollMs: 1500,
+  hiddenPollMs: 8000,
+  maxPollBackoffMs: 30000,
+});
 
-// Mirror for easy global access
-if (typeof window !== 'undefined') {
-  window.CONFIG = CONFIG;
-}
-
-/* ---------------- Helpers ---------------- */
 export function apiUrl(path = '') {
   const p = String(path || '');
-  // Allow callers to pass with or without leading slash
-  return API_BASE + (p.startsWith('/') ? p : `/${p}`);
+  return `${API_BASE}${p.startsWith('/') ? p : `/${p}`}`;
 }
 
-/** Append token/api to a URL (used by cross-UI links). */
-export function withTokenAndApi(url) {
-  try {
-    const u = new URL(url, location.origin);
-    if (PLAYER_TOKEN) u.searchParams.set('token', PLAYER_TOKEN);
-    if (API_BASE) u.searchParams.set('api', API_BASE);
-    return u.toString();
-  } catch {
-    const sep = url.includes('?') ? '&' : '?';
-    const parts = [];
-    if (PLAYER_TOKEN) parts.push(`token=${encodeURIComponent(PLAYER_TOKEN)}`);
-    if (API_BASE) parts.push(`api=${encodeURIComponent(API_BASE)}`);
-    return parts.length ? `${url}${sep}${parts.join('&')}` : url;
-  }
+export function summaryUrl(sessionId = SESSION_ID) {
+  const u = new URL(SUMMARY_BASE);
+  if (sessionId) u.searchParams.set('duelId', sessionId);
+  return u.toString();
 }
 
-/* ---------------- Friendly boot log ---------------- */
-try {
-  // eslint-disable-next-line no-console
-  console.log('[UI] CONFIG:', {
-    apiBase: API_BASE,
-    uiBase: UI_BASE,
-    hubBase: HUB_BASE,
-    mode: CONFIG.mode,
-    spectator: CONFIG.spectator,
-    mock: CONFIG.mock,
-    hasToken: !!PLAYER_TOKEN,
-  });
-} catch { /* noop */ }
+export function hubUrl() {
+  return HUB_BASE;
+}
+
+export function spectatorUrl(sessionId = SESSION_ID) {
+  const u = new URL(SPECTATOR_BASE);
+  if (sessionId) u.searchParams.set('session', sessionId);
+  return u.toString();
+}
+
+if (typeof window !== 'undefined') {
+  window.API_BASE = API_BASE;
+  window.DUEL_UI_URL = UI_BASE;
+  window.HUB_UI_URL = HUB_BASE;
+  window.DUEL_SESSION_ID = SESSION_ID;
+  // Deliberately do not mirror or persist the viewer token into legacy globals/localStorage.
+}
