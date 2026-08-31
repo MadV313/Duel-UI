@@ -1,259 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>DayZ CCG Duel Field</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#071216" />
+  <title>SV13 TCG — Duel</title>
   <link rel="stylesheet" href="styles/style.css" />
-
-  <!-- (Optional) Use an existing local icon to avoid 404s in logs -->
-  <link rel="icon" href="images/cards/000_CardBack_Unique.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="images/cards/000_CardBack_Unique.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="images/cards/000_CardBack_Unique.png">
-  <link rel="apple-touch-icon" href="images/cards/000_CardBack_Unique.png">
-
-  <!-- ✅ Global bootstrap: expose token/api/mode/imgbase to all scripts -->
-  <script>
-    (function () {
-      const qs = new URLSearchParams(location.search);
-
-      // Prefer the UI proxy (/api). Allow ?api=... override for local/dev.
-      const API = (qs.get('api') || '/api').replace(/\/+$/, '');
-      const TOKEN = qs.get('token') || '';
-      const MODE = (qs.get('mode') || '').toLowerCase();
-      const IMG_BASE = (qs.get('imgbase') || '').replace(/\/+$/, '');
-
-      // Export to window for all ES modules / inline handlers
-      window.API_BASE = API;
-      window.USER_TOKEN = TOKEN;
-      window.DUEL_MODE = MODE;
-      window.IMG_BASE = IMG_BASE;
-
-      console.log('[UI] API_BASE =', API, 'TOKEN set?', !!TOKEN, 'MODE =', MODE, 'IMG_BASE =', IMG_BASE || '(default in renderers)');
-    })();
-  </script>
-
-  <!-- 🧽 Net hygiene: install global fetch/backoff guards BEFORE any network-using scripts -->
-  <script src="scripts/net-hygiene.js" defer></script>
-
-  <!-- Duel Loader (for Discord-initiated PvP matches) -->
-  <script type="module" src="scripts/duelLoader.js" defer></script>
-
-  <!-- Script Modules (these now see window.API_BASE, window.USER_TOKEN, window.IMG_BASE) -->
-  <script type="module" src="/scripts/api-base.js"></script>
-  <script type="module" src="/scripts/fetch-shim.js"></script>
-  <script type="module" src="scripts/config.js" defer></script>
-  <script type="module" src="scripts/duelState.js" defer></script>
-  <script type="module" src="scripts/renderCard.js" defer></script>
-  <script type="module" src="scripts/renderHand.js" defer></script>
-  <script type="module" src="scripts/renderField.js" defer></script>
-  <script type="module" src="scripts/renderDuelUI.js" defer></script>
-  <script type="module" src="scripts/animations.js" defer></script>
-  <script type="module" src="scripts/coinFlip.js" defer></script>
-  <script type="module" src="scripts/duel.js" defer></script>
-  <script type="module" src="scripts/buffTracker.js" defer></script>
-  <script type="module" src="scripts/chatClient.js" defer></script>
-  <!-- ❌ removed spectatorView.js from the duel page -->
-  <!-- <script type="module" src="scripts/spectatorView.js" defer></script> -->
-
-  <!-- 🔊 Audio bootstrap (kept minimal; everything else unchanged) -->
-  <script type="module">
-    import { audio, installSoundToggleUI } from './scripts/audio.js';
-
-    // Use a relative path so it works on both Railway and GitHub Pages
-    audio.configure({
-      bgSrc: 'audio/bg/Follow the Trail.mp3',
-      volume: 0.65,
-      bgVolume: 0.35
-    });
-
-    // Set up autoplay unlock listeners and immediately attempt to start
-    audio.initAutoplayUnlock();
-    audio.startBg();
-
-    // Add the top-right sound toggle button (🔊/🔇); CSS already handles z-index
-    installSoundToggleUI();
-
-    // Optional: expose for console debugging
-    window.audio = audio;
-  </script>
-
-  <!-- Spectator Styles -->
-  <link rel="stylesheet" href="styles/spectatorStyles.css" id="spectatorStyles" />
+  <link rel="icon" href="images/cards/000_WinterlandDeathDeck_Back.png" />
+  <script type="module" src="scripts/sessionApp.js"></script>
 </head>
-
 <body>
-  <!-- ❄️ Snowfall overlay -->
-  <div class="snowfall"></div>
+  <div class="snowfall" aria-hidden="true"></div>
 
-  <!-- Player 2 (Opponent) -->
-  <div id="player2-hand" class="hand hand--top"></div>
-  <div id="player2-field" class="field"></div>
+  <main id="duel-shell" class="session-duel-shell">
+    <section class="session-header" aria-label="Duel status">
+      <div>
+        <div class="eyebrow">SV13 TCG</div>
+        <h1>Winterland Duel</h1>
+        <div id="mode-display" class="mode-display">Loading session…</div>
+      </div>
+      <a id="returnToHub" class="return-to-hub" href="https://sv13tcg.com">← Return to HUB</a>
+    </section>
 
-  <!-- HP & Turn Info -->
-  <div id="hp-display">
-    <div>Challenger HP: <span id="player1-hp">200</span></div>
-    <div>Opponent HP: <span id="player2-hp">200</span></div>
+    <div id="connection-status" class="connection-status working" role="status" aria-live="polite">Connecting to duel session…</div>
+
+    <section class="player-panel remote-panel">
+      <div class="player-heading">
+        <div><strong id="remote-name">Opponent</strong> <span class="seat-label">REMOTE_PLAYER</span></div>
+        <div class="player-metrics"><span>HP <b id="remote-hp">200</b></span><span id="remote-deck-count">Deck: —</span></div>
+      </div>
+      <div id="remote-hand-label" class="zone-label">Opponent Hand</div>
+      <div id="remote-hand" class="hand hand--top session-hand"></div>
+      <div class="zone-label">Opponent Field</div>
+      <div id="remote-field" class="field session-field"></div>
+      <div id="remote-discard-counter" class="discard-counter session-discard">Discard: 0</div>
+    </section>
+
+    <section class="turn-panel">
+      <div id="turn-display">Waiting for server state…</div>
+    </section>
+
+    <section class="player-panel local-panel">
+      <div class="player-heading">
+        <div><strong id="local-name">You</strong> <span class="seat-label">LOCAL_PLAYER</span></div>
+        <div class="player-metrics"><span>HP <b id="local-hp">200</b></span><span id="local-deck-count">Deck: —</span></div>
+      </div>
+      <div class="zone-label">Your Field</div>
+      <div id="local-field" class="field session-field"></div>
+      <div id="local-hand-label" class="zone-label">Your Hand</div>
+      <div id="local-hand" class="hand hand--bottom session-hand"></div>
+      <div id="local-discard-counter" class="discard-counter session-discard">Discard: 0</div>
+    </section>
+
+    <section id="controls" class="session-controls" aria-label="Duel actions">
+      <button id="drawBtn" type="button">Draw</button>
+      <button id="endTurnBtn" type="button">End Turn</button>
+      <button id="forfeitBtn" type="button" class="danger-action">Forfeit</button>
+    </section>
+  </main>
+
+  <div id="announcement" class="overlay hidden" aria-live="assertive"></div>
+  <div id="coinFlipContainer" class="coin-session-overlay hidden" aria-hidden="true">
+    <img src="images/effects/coin_flip.gif" alt="Coin flip" />
   </div>
-  <!-- 👇 hidden until the coin flip completes -->
-  <div id="turn-display" class="hidden"></div>
 
-  <!-- Player 1 (You) -->
-  <div id="player1-field" class="field"></div>
-  <div id="player1-hand" class="hand hand--bottom"></div>
-
-  <!-- Controls -->
-  <div id="controls" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
-    <button id="startPracticeBtn">🎮 Start Practice Duel</button>
-    <button id="drawBtn" onclick="drawCard()">Draw</button>
-    <button id="endTurnBtn" onclick="endTurn()">End Turn</button>
-    <!-- <button onclick="flipCoin()">Flip Coin</button> -->
+  <div id="card-action-menu" class="card-action-menu hidden" role="menu">
+    <button id="card-menu-play" type="button">Play</button>
+    <button id="card-menu-discard" type="button">Discard</button>
   </div>
 
-  <!-- Overlay for announcements -->
-  <div id="announcement" class="overlay hidden" aria-live="polite"></div>
-
-  <!-- Coin Flip Animation (centered & layered via CSS) -->
-  <div id="coinFlipContainer">
-    <div class="coin-flip-container">
-      <img class="coin-flip-image" src="images/effects/coin_flip.gif" alt="Coin Flip" />
-      <div class="coin-flip-result" aria-hidden="true"></div>
+  <section id="duel-error" class="duel-error hidden" role="alert">
+    <div class="duel-error-card">
+      <h2 id="duel-error-title">Duel unavailable</h2>
+      <p id="duel-error-message"></p>
+      <div class="error-actions">
+        <button id="retrySessionBtn" type="button">Retry</button>
+        <a href="https://sv13tcg.com">Return to HUB</a>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <!-- 🔒 Anchored discard counters (don’t drift with hand width) -->
-  <div class="discard-anchor discard-anchor--top">
-    <div id="player2-discard-counter" class="discard-counter">Discard: 0</div>
-  </div>
-  <div class="discard-anchor discard-anchor--bottom">
-    <div id="player1-discard-counter" class="discard-counter">Discard: 0</div>
-  </div>
-
-  <a href="https://madv313.github.io/HUB-UI/" class="return-to-hub" id="returnToHub">← Return to Hub</a>
-
-  <!-- Inline Script Bindings -->
-  <script type="module">
-    import { loadPracticeDuel } from './scripts/loadPracticeDuel.js';
-    import { renderSpectatorView } from './scripts/spectatorView.js';
-    import { drawCard, endTurn } from './scripts/duel.js';
-
-    // Expose bits used by inline onclicks / other scripts
-    window.loadPracticeDuel = loadPracticeDuel;
-    window.drawCard         = drawCard;
-    window.endTurn          = endTurn;
-
-    function $(id){ return document.getElementById(id); }
-    function hide(el){ if(el) el.style.display='none'; }
-    function show(el,disp){ if(el) el.style.display=disp; }
-
-    function hideUntilFlip() {
-      const hands  = ['player1-hand','player2-hand'];
-      const fields = ['player1-field','player2-field'];
-      hands.forEach(id => hide($(id)));
-      fields.forEach(id => hide($(id)));
-      hide($( 'drawBtn'));
-      hide($( 'endTurnBtn'));
-
-      // keep the banner hidden via class only (coinFlip will remove it)
-      const turn = $('turn-display');
-      if (turn) { turn.classList.add('hidden'); }
-    }
-
-    function rewriteReturnToHub() {
-      const a = $('returnToHub');
-      if (!a) return;
-
-      try {
-        const u = new URL(a.href);
-        if (window.USER_TOKEN) u.searchParams.set('token', window.USER_TOKEN);
-        if (window.API_BASE)   u.searchParams.set('api', window.API_BASE);
-        if (window.IMG_BASE)   u.searchParams.set('imgbase', window.IMG_BASE);
-        a.href = u.toString();
-      } catch {
-        // Fallback if relative href is ever used
-        let base = a.getAttribute('href') || 'https://madv313.github.io/HUB-UI/';
-        const parts = [];
-        if (window.USER_TOKEN) parts.push(`token=${encodeURIComponent(window.USER_TOKEN)}`);
-        if (window.API_BASE)   parts.push(`api=${encodeURIComponent(window.API_BASE)}`);
-        if (window.IMG_BASE)   parts.push(`imgbase=${encodeURIComponent(window.IMG_BASE)}`);
-        const sep = base.includes('?') ? '&' : '?';
-        if (parts.length) a.setAttribute('href', `${base}${sep}${parts.join('&')}`);
-      }
-    }
-
-    function init() {
-      const urlParams   = new URLSearchParams(window.location.search);
-      const isSpectator = urlParams.get('spectator') === 'true';
-      const isMock      = urlParams.get('mock') === 'true';
-
-      rewriteReturnToHub();
-
-      if (isSpectator) {
-        renderSpectatorView();
-        const controls = $('controls');
-        if (controls) controls.style.display = 'none';
-        const spec = $('spectatorStyles');
-        if (spec) spec.disabled = false;
-      } else {
-        const spec = $('spectatorStyles');
-        if (spec) spec.disabled = true;
-      }
-
-      // Only the Start button should be visible before coin flip (unless mock mode)
-      if (!isSpectator && !isMock) hideUntilFlip();
-
-      if (isMock) {
-        $('controls').style.display = 'flex';
-        show($('player1-hand'),'flex');
-        show($('player2-hand'),'flex');
-        show($('player1-field'),'flex');
-        show($('player2-field'),'flex');
-      }
-
-      const startBtn = $('startPracticeBtn');
-      if (startBtn) {
-        startBtn.addEventListener('click', async () => {
-          try {
-            console.log('🎮 Starting practice duel...');
-            startBtn.disabled = true;
-            startBtn.textContent = 'Initializing...';
-
-            // ⚠️ loadPracticeDuel() already performs the coin flip & reveals UI
-            await loadPracticeDuel();
-
-            startBtn.textContent = '✅ Practice Ready';
-            startBtn.style.display = 'none';
-          } catch (e) {
-            console.error('❌ Start failed:', e);
-            startBtn.disabled = false;
-            startBtn.textContent = '🎮 Start Practice Duel';
-          }
-        });
-      }
-
-      console.log('[UI] Using API via', window.API_BASE);
-    }
-
-    // Fix for module/DOMContentLoaded race:
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', init, { once: true });
-    } else {
-      init();
-    }
-  </script>
-
-  <!-- Emergency: make sure no overlay is eating clicks -->
-  <script>
-    (function unblockClicks() {
-      try {
-        const ids = ['coinFlipContainer', 'announcement'];
-        ids.forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.style.pointerEvents = 'none';
-        });
-        const snow = document.querySelector('.snowfall');
-        if (snow) snow.style.pointerEvents = 'none';
-      } catch {}
-    })();
-  </script>
+  <section id="winner-overlay" class="winner-session-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="winner-title">
+    <div class="winner-session-card">
+      <div class="eyebrow">SERVER FINALIZED</div>
+      <h2 id="winner-title">Duel Complete</h2>
+      <p id="winner-reason"></p>
+      <div class="winner-actions">
+        <a id="viewSummaryBtn" href="https://summary.sv13tcg.com">View Full Summary</a>
+        <a href="https://sv13tcg.com">Return to HUB</a>
+      </div>
+    </div>
+  </section>
 </body>
 </html>

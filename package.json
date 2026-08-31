@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "echo \"(no build step)\"",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test test/session-contract.test.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

@@ -1,0 +1,16 @@
+The following legacy modules are intentionally PRESERVED for the later 127-card effect port/QA,
+but production index.html no longer loads them as authoritative network/game-state code:
+
+scripts/duelLoader.js
+scripts/loadPracticeDuel.js
+scripts/duelState.js
+scripts/duel.js
+scripts/renderDuelUI.js
+scripts/renderHand.js
+scripts/renderField.js
+scripts/api.js
+scripts/api-base.js
+scripts/fetch-shim.js
+
+Do not delete the effect-heavy files until their behavior has been migrated into the server-owned
+DuelSession action/effect engine and the 127-card QA matrix has passed.
