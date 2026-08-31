@@ -1,10 +1,10 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071216" />
-  <title>SV13 TCG — Duel</title>
+  <title>SV13 TCG — Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
   <link rel="icon" href="images/cards/000_WinterlandDeathDeck_Back.png" />
   <script type="module" src="scripts/sessionApp.js"></script>
@@ -12,62 +12,50 @@
 <body>
   <div class="snowfall" aria-hidden="true"></div>
 
-  <main id="duel-shell" class="session-duel-shell">
-    <section class="session-header" aria-label="Duel status">
-      <div>
-        <div class="eyebrow">SV13 TCG</div>
-        <h1>Winterland Duel</h1>
-        <div id="mode-display" class="mode-display">Loading session…</div>
-      </div>
-      <a id="returnToHub" class="return-to-hub" href="https://sv13tcg.com">← Return to HUB</a>
-    </section>
+  <div id="session-status" class="session-status working" role="status" aria-live="polite">
+    Connecting to duel session…
+  </div>
 
-    <div id="connection-status" class="connection-status working" role="status" aria-live="polite">Connecting to duel session…</div>
+  <!-- Opponent: classic original Duel UI placement -->
+  <div id="player2-hand" class="hand hand--top"></div>
+  <div id="player2-field" class="field"></div>
 
-    <section class="player-panel remote-panel">
-      <div class="player-heading">
-        <div><strong id="remote-name">Opponent</strong> <span class="seat-label">REMOTE_PLAYER</span></div>
-        <div class="player-metrics"><span>HP <b id="remote-hp">200</b></span><span id="remote-deck-count">Deck: —</span></div>
-      </div>
-      <div id="remote-hand-label" class="zone-label">Opponent Hand</div>
-      <div id="remote-hand" class="hand hand--top session-hand"></div>
-      <div class="zone-label">Opponent Field</div>
-      <div id="remote-field" class="field session-field"></div>
-      <div id="remote-discard-counter" class="discard-counter session-discard">Discard: 0</div>
-    </section>
+  <!-- HP + turn: intentionally retained from the original Duel UI -->
+  <div id="hp-display">
+    <div>Opponent HP: <span id="player2-hp">200</span></div>
+    <div>You HP: <span id="player1-hp">200</span></div>
+  </div>
+  <div id="turn-display" class="hidden">Waiting for server state…</div>
 
-    <section class="turn-panel">
-      <div id="turn-display">Waiting for server state…</div>
-    </section>
+  <!-- Local player -->
+  <div id="player1-field" class="field"></div>
+  <div id="player1-hand" class="hand hand--bottom"></div>
 
-    <section class="player-panel local-panel">
-      <div class="player-heading">
-        <div><strong id="local-name">You</strong> <span class="seat-label">LOCAL_PLAYER</span></div>
-        <div class="player-metrics"><span>HP <b id="local-hp">200</b></span><span id="local-deck-count">Deck: —</span></div>
-      </div>
-      <div class="zone-label">Your Field</div>
-      <div id="local-field" class="field session-field"></div>
-      <div id="local-hand-label" class="zone-label">Your Hand</div>
-      <div id="local-hand" class="hand hand--bottom session-hand"></div>
-      <div id="local-discard-counter" class="discard-counter session-discard">Discard: 0</div>
-    </section>
-
-    <section id="controls" class="session-controls" aria-label="Duel actions">
-      <button id="drawBtn" type="button">Draw</button>
-      <button id="endTurnBtn" type="button">End Turn</button>
-      <button id="forfeitBtn" type="button" class="danger-action">Forfeit</button>
-    </section>
-  </main>
+  <!-- Original gameplay semantics: draw is automatic; End Turn is the normal turn control. -->
+  <div id="controls">
+    <button id="drawBtn" type="button" aria-hidden="true" tabindex="-1">Draw</button>
+    <button id="endTurnBtn" type="button">End Turn</button>
+    <button id="forfeitBtn" type="button" class="danger-action">Forfeit</button>
+  </div>
 
   <div id="announcement" class="overlay hidden" aria-live="assertive"></div>
-  <div id="coinFlipContainer" class="coin-session-overlay hidden" aria-hidden="true">
-    <img src="images/effects/coin_flip.gif" alt="Coin flip" />
+
+  <div id="coinFlipContainer" aria-hidden="true">
+    <div class="coin-flip-container">
+      <img class="coin-flip-image" src="images/effects/coin_flip.gif" alt="Coin Flip" />
+      <div class="coin-flip-result" aria-hidden="true"></div>
+    </div>
   </div>
 
-  <div id="card-action-menu" class="card-action-menu hidden" role="menu">
-    <button id="card-menu-play" type="button">Play</button>
-    <button id="card-menu-discard" type="button">Discard</button>
+  <!-- Original anchored discard counters. Deck/discard artwork is provided by the hand pseudo-elements. -->
+  <div class="discard-anchor discard-anchor--top">
+    <div id="player2-discard-counter" class="discard-counter">Discard: 0</div>
   </div>
+  <div class="discard-anchor discard-anchor--bottom">
+    <div id="player1-discard-counter" class="discard-counter">Discard: 0</div>
+  </div>
+
+  <a href="https://sv13tcg.com" class="return-to-hub" id="returnToHub">← Return to HUB</a>
 
   <section id="duel-error" class="duel-error hidden" role="alert">
     <div class="duel-error-card">
