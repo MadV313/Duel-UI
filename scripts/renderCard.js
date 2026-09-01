@@ -15,7 +15,10 @@ const IMG_BASE = (() => {
 })();
 
 // Build paths safely (no double slashes)
-const canonicalBack = allCards.find(card => card?.card_id === ID_BACK)?.image || '000_WinterlandDeathDeck_Back.png';
+const declaredBack = allCards.find(card => card?.card_id === ID_BACK)?.image || '';
+// The repo's actual canonical back asset is 000_CardBack_Unique.png.
+// Keep the metadata filename only as a secondary fallback for older deployments.
+const canonicalBack = '000_CardBack_Unique.png';
 
 const imgPath = (img) => {
   if (!img) return `${IMG_BASE}/${canonicalBack}`;
@@ -25,6 +28,7 @@ const imgPath = (img) => {
 };
 
 const CARD_BACK_SRC = imgPath(canonicalBack);
+const LEGACY_BACK_SRC = declaredBack ? imgPath(declaredBack) : imgPath('000_WinterlandDeathDeck_Back.png');
 
 // Normalize "tags" to an array (JSON sometimes has comma-strings)
 function toTags(val) {
@@ -109,13 +113,23 @@ export function renderCard(cardId, isFaceDown = false) {
   img.alt = isFaceDown ? 'Face-down card' : (resolved?.name || 'Unknown card');
 
   if (isFaceDown) {
-    // ✅ Always show the dedicated back art when face-down
+    // Always show the real repo-backed card back. If an older deployment is
+    // missing it, fall back once to the legacy metadata path.
     img.src = CARD_BACK_SRC;
+    img.addEventListener('error', () => {
+      if (img.src !== new URL(LEGACY_BACK_SRC, document.baseURI).href) img.src = LEGACY_BACK_SRC;
+    }, { once: true });
   } else {
     const primaryImg = resolveFrontImage(resolved);
     img.src = primaryImg || CARD_BACK_SRC;
+    let fellBack = false;
     img.addEventListener('error', () => {
-      if (img.src !== CARD_BACK_SRC) img.src = CARD_BACK_SRC;
+      if (!fellBack) {
+        fellBack = true;
+        img.src = CARD_BACK_SRC;
+      } else if (img.src !== new URL(LEGACY_BACK_SRC, document.baseURI).href) {
+        img.src = LEGACY_BACK_SRC;
+      }
     });
   }
 
