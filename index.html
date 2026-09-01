@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#071216" />
   <title>SV13 TCG — Duel Field</title>
   <link rel="stylesheet" href="styles/style.css" />
-  <link rel="icon" href="images/cards/000_WinterlandDeathDeck_Back.png" />
+  <link rel="icon" href="images/cards/000_CardBack_Unique.png" />
   <script type="module" src="scripts/sessionApp.js"></script>
 </head>
 <body>
@@ -16,22 +16,43 @@
     Connecting to duel session…
   </div>
 
-  <!-- Opponent: classic original Duel UI placement -->
-  <div id="player2-hand" class="hand hand--top"></div>
+  <!-- Opponent: deck LEFT, hand CENTER, discard RIGHT. -->
+  <div id="player2-zone" class="hand-zone hand-zone--top">
+    <div id="player2-deck-pile" class="pile-stack pile-stack--deck" aria-label="Opponent deck">
+      <img src="images/cards/000_CardBack_Unique.png" alt="Opponent deck" />
+      <div id="player2-deck-counter" class="pile-counter">Deck: 0</div>
+    </div>
+    <div id="player2-hand" class="hand hand--top"></div>
+    <div id="player2-discard-pile" class="pile-stack pile-stack--discard" aria-label="Opponent discard pile">
+      <img src="images/cards/000_CardBack_Unique.png" alt="Opponent discard pile" />
+      <div id="player2-discard-counter" class="pile-counter discard-counter">Discard: 0</div>
+    </div>
+  </div>
+
   <div id="player2-field" class="field"></div>
 
-  <!-- HP + turn: intentionally retained from the original Duel UI -->
   <div id="hp-display">
     <div>Opponent HP: <span id="player2-hp">200</span></div>
     <div>You HP: <span id="player1-hp">200</span></div>
   </div>
   <div id="turn-display" class="hidden">Waiting for server state…</div>
 
-  <!-- Local player -->
   <div id="player1-field" class="field"></div>
-  <div id="player1-hand" class="hand hand--bottom"></div>
 
-  <!-- Original gameplay semantics: draw is automatic; End Turn is the normal turn control. -->
+  <!-- Local player: discard LEFT, hand CENTER, deck RIGHT. -->
+  <div id="player1-zone" class="hand-zone hand-zone--bottom">
+    <div id="player1-discard-pile" class="pile-stack pile-stack--discard" aria-label="Your discard pile">
+      <img src="images/cards/000_CardBack_Unique.png" alt="Your discard pile" />
+      <div id="player1-discard-counter" class="pile-counter discard-counter">Discard: 0</div>
+    </div>
+    <div id="player1-hand" class="hand hand--bottom"></div>
+    <div id="player1-deck-pile" class="pile-stack pile-stack--deck" aria-label="Your deck">
+      <img src="images/cards/000_CardBack_Unique.png" alt="Your deck" />
+      <div id="player1-deck-counter" class="pile-counter">Deck: 0</div>
+    </div>
+  </div>
+
+  <!-- Draw remains hidden: start-of-turn draw is server authoritative. -->
   <div id="controls">
     <button id="drawBtn" type="button" aria-hidden="true" tabindex="-1">Draw</button>
     <button id="endTurnBtn" type="button">End Turn</button>
@@ -45,14 +66,6 @@
       <img class="coin-flip-image" src="images/effects/coin_flip.gif" alt="Coin Flip" />
       <div class="coin-flip-result" aria-hidden="true"></div>
     </div>
-  </div>
-
-  <!-- Original anchored discard counters. Deck/discard artwork is provided by the hand pseudo-elements. -->
-  <div class="discard-anchor discard-anchor--top">
-    <div id="player2-discard-counter" class="discard-counter">Discard: 0</div>
-  </div>
-  <div class="discard-anchor discard-anchor--bottom">
-    <div id="player1-discard-counter" class="discard-counter">Discard: 0</div>
   </div>
 
   <a href="https://sv13tcg.com" class="return-to-hub" id="returnToHub">← Return to HUB</a>
